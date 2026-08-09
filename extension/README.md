@@ -26,7 +26,7 @@
 
 ## 权限说明
 
-- `activeTab` / `scripting`：读取当前页 URL（不注入采集逻辑；采集在 Hub + OpenCLI）
+- `activeTab` / `tabs`：读取当前页 URL（不注入采集逻辑；采集在 Hub + OpenCLI）
 - `storage`：保存 Hub 地址与偏好
 - `host_permissions`：仅 `localhost` / `127.0.0.1`，调用本机 API
 
