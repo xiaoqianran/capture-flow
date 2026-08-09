@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**单进程 Hub+UI 已通 → 可选选中文本捕获 / AI 流式 / 版本时间线**。
+当前焦点：**Userscript monorepo 已重建 → 可选选中文本 / 扩展双端共用 packages**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -114,7 +114,8 @@
 |----|------|--------|------|------|
 | M5-01 | CLI：`capture` / `job` / `doc` / `health` | P0 | done | `cmd/capture` |
 | M5-02 | 本地 HTTP API（触发采集 + 查询） | P0 | done | POST/GET jobs + docs |
-| M5-03 | Chrome Extension：当前页捕获 | P0 | done | `extension/` MV3 popup + 快捷键 |
+| M5-03 | 浏览器捕获：Userscript Studio Dock | P0 | done | `userscript/` monorepo（SubBatch 架构） |
+| M5-03b | Chrome Extension 过渡壳 | P2 | done | 权威路径改为 userscript |
 | M5-04 | Extension：选中文本捕获 | P1 | todo | M5-03 |
 | M5-05 | Schedule 触发器（cron 式） | P2 | todo | M5-01 |
 | M5-06 | 进度与失败文案（用户可读） | P0 | done | popup 展示 status/trace/错误 |
@@ -234,6 +235,7 @@ Hub / Daemon        Go
 | 2026-08-10 | M5-03 Chrome Extension：当前页捕获 + 可选 AI |
 | 2026-08-10 | M6 Local Hub Web UI + GET /jobs|/docs 列表 + CORS |
 | 2026-08-10 | Hub 托管 web/dist，单端口同域 UI+API |
+| 2026-08-10 | 按 loop-bilibili-subbatch 彻底重建 userscript monorepo |
 
 ---
 

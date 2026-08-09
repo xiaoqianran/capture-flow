@@ -1,0 +1,14 @@
+{
+  "name": "@capture-flow/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@capture-flow/core": "workspace:*",
+    "@capture-flow/hub-client": "workspace:*",
+    "@capture-flow/runtime": "workspace:*"
+  }
+}

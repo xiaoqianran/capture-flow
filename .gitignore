@@ -24,8 +24,9 @@
 .DS_Store
 Thumbs.db
 
-# Node / Bun (later)
+# Node / Bun
 node_modules/
 .web/
-dist/
+/web/dist/
+/userscript/dist/userscript/.build/
 *.log

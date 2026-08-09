@@ -1,0 +1,12 @@
+{
+  "name": "@capture-flow/userscript-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@capture-flow/core": "workspace:*",
+    "@capture-flow/hub-client": "workspace:*",
+    "@capture-flow/runtime": "workspace:*",
+    "@capture-flow/ui": "workspace:*"
+  }
+}

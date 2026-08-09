@@ -14,7 +14,8 @@
 | 去重 | 同 `document_id` + 同 `content_hash` 不写新 revision |
 | AI | OpenAI 兼容 `/chat/completions`；内置 summarize/outline/qa-prep |
 | 客户端 | `go run ./cmd/capture <url>` / `capture ai <doc>` |
-| Chrome 扩展 | `extension/` 当前页一键入队（可选 AI） |
+| 油猴脚本（权威） | `userscript/` monorepo → `capture-flow.user.js`（Studio Dock） |
+| Chrome 扩展 | `extension/` 过渡壳（见该目录 README） |
 | Local Hub UI | `web/` Library / Jobs / Capture（Vite） |
 
 ```text
@@ -59,18 +60,20 @@ curl -s -X POST http://127.0.0.1:8080/ai/run \
 
 **说明**：知乎仅问题页（无 `/answer/<id>`）会被拒绝。重复捕获且内容未变时 Job trace 含 `dedup:same_hash`。AI 结果写入 `data/ai_responses/*.md`。
 
-## Chrome 扩展
+## 油猴脚本（推荐 · SubBatch 架构）
 
 ```bash
-# 1) 启动 Hub
-go run ./cmd/hub -addr 127.0.0.1:8080 -data data
-
-# 2) Chrome → chrome://extensions → 开发者模式
-#    → 加载已解压的扩展程序 → 选择仓库下 extension/ 目录
+cd userscript
+bun install
+bun run build
+# → userscript/dist/userscript/capture-flow.user.js
+# Tampermonkey 安装该文件；Hub 需在 127.0.0.1:8080 运行
 ```
 
-详见 [extension/README.md](./extension/README.md)。快捷键默认 `Ctrl+Shift+Y`。
+设计对齐 `loop-bilibili-subbatch`：Host Adapter → Runtime Ports → Hub Client → Studio UI。  
+详见 [userscript/README.md](./userscript/README.md)。快捷键 `Alt+Shift+C` / `Alt+Shift+P`。
 
+Chrome 扩展为过渡壳，见 [extension/README.md](./extension/README.md)。
 ## Local Hub Web UI
 
 **单进程（推荐）**：
@@ -101,7 +104,8 @@ cd web && bun run dev   # http://127.0.0.1:5173 ，/api → :8080
 ```text
 cmd/hub/           守护进程
 cmd/capture/       本地 CLI 客户端
-extension/         Chrome MV3 扩展（当前页捕获）
+userscript/        油猴 monorepo（权威浏览器集成）
+extension/         Chrome MV3 过渡壳
 web/               Local Hub UI（React + Vite）
 internal/
   adapter/         zhihu · generic-web · fake

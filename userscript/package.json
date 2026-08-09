@@ -1,0 +1,23 @@
+{
+  "name": "capture-flow-userscript",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capture Flow Tampermonkey monorepo (SubBatch-style runtime ports)",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "bun run scripts/build-userscript.ts",
+    "build:userscript": "bun run scripts/build-userscript.ts",
+    "dev": "vite --config apps/userscript/vite.config.ts --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.1",
+    "vitest": "^3.2.4"
+  }
+}
