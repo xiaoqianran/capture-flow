@@ -18,7 +18,9 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**M0 → 技术栈协商与锁定**。
+当前焦点：**M0 收尾 → M1 Go Hub 骨架**。
+
+**技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = 外部 CLI。详见 `ARCHITECTURE.md` §9。
 
 ---
 
@@ -27,28 +29,30 @@
 | ID | 任务 | 优先级 | 状态 | 说明 |
 |----|------|--------|------|------|
 | M0-01 | 沉淀 `ARCHITECTURE.md` | P0 | done | 从 v001 延伸 |
-| M0-02 | 沉淀 `TASKS.md` | P0 | doing | 本文 |
-| M0-03 | 技术栈选型讨论并锁定 | P0 | todo | 见文末「选型待议」 |
-| M0-04 | Commit / PR / 目录约定 | P0 | todo | 阿里规范 commit；包结构落地 |
-| M0-05 | 最小 README（产品一句话 + 如何跑） | P1 | todo | 栈锁定后写 |
-| M0-06 | ContentPacket JSON Schema 初版 | P0 | todo | 版本字段 `schema_version` |
-| M0-07 | 错误码与 Job 状态机枚举 | P0 | todo | 可恢复 / 不可恢复分类 |
+| M0-02 | 沉淀 `TASKS.md` | P0 | done | 本文 |
+| M0-03 | 技术栈选型讨论并锁定 | P0 | done | Go Hub + Bun/TS 客户端 |
+| M0-04 | Commit / PR / 目录约定 | P0 | todo | 阿里规范；落地 monorepo 骨架属 M1-01 |
+| M0-05 | 最小 README（产品一句话 + 如何跑） | P1 | todo | 写明 Go / Bun 双工具链 |
+| M0-06 | ContentPacket JSON Schema 初版 | P0 | todo | `schemas/` + `schema_version` |
+| M0-07 | 错误码与 Job 状态机枚举 | P0 | todo | 可恢复 / 不可恢复；跨 Go/TS 同源 |
 
 ---
 
-## M1 — 可运行骨架
+## M1 — 可运行骨架（Go Daemon）
 
 | ID | 任务 | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| M1-01 | 初始化 monorepo / 工程结构 | P0 | todo | M0-03 |
-| M1-02 | 共享类型：Target / Job / Plan / Raw / Packet | P0 | todo | M0-06 |
-| M1-03 | Orchestrator：内存队列 + 状态机 | P0 | todo | M1-02 |
-| M1-04 | FakeAdapter + FakeRunner 通路 | P0 | todo | M1-03 |
-| M1-05 | Store：Packet 落盘 + 按 id 读取 | P0 | todo | M1-02 |
-| M1-06 | 集成测试：假 URL → Packet | P0 | todo | M1-04, M1-05 |
+| M1-01 | 初始化 monorepo：`cmd/hub`、`internal/*`、`web/`、`packages/protocol` | P0 | todo | M0-03 |
+| M1-02 | 协议：JSON Schema + TS 类型；Go struct 对齐 | P0 | todo | M0-06 |
+| M1-03 | Orchestrator：内存队列 + Job 状态机（Go） | P0 | todo | M1-02 |
+| M1-04 | FakeAdapter + FakeRunner 通路（Go） | P0 | todo | M1-03 |
+| M1-05 | Store：SQLite 元数据 + Packet/文件落盘 | P0 | todo | M1-02 |
+| M1-06 | 集成测试：假 URL → ContentPacket（`go test`） | P0 | todo | M1-04, M1-05 |
 | M1-07 | 结构化日志 / Job trace 字段 | P1 | todo | M1-03 |
+| M1-08 | 最小 REST：`POST /jobs`、`GET /jobs/:id`、`GET /docs/:id` | P0 | todo | M1-03, M1-05 |
+| M1-09 | WebSocket：Job 状态推送（可先 stub） | P1 | todo | M1-08 |
 
-**退出**：`capture-flow run --fixture demo`（或等价）打印完整 Packet。
+**退出**：`go run ./cmd/hub` 启动后，用 CLI 或 curl 提交 fixture Job，拿到完整 Packet（JSON）。
 
 ---
 
@@ -149,71 +153,65 @@
 ## 建议实施顺序（最短闭环）
 
 ```
-M0 文档与栈
- → M1 假数据贯通
- → M2 一个真实 Adapter + CLI Runner
- → M5-01/02 可触发
+M0 文档与栈（栈已锁定）
+ → M1 Go Hub 假数据贯通 + 最小 REST
+ → M2 一个真实 Adapter + Go CLI Runner + 外部 collector
+ → M5-01/02 Go CLI + HTTP 可触发
  → M3 降级策略
- → M4 最小 AI
- → M5-03 扩展
- → M6 UI 打磨
+ → M4 最小 AI（Go Dispatcher）
+ → M5-03 Bun 构建 Chrome Extension
+ → M6 React Local Hub UI 打磨
+ → （远期）Wails 桌面封装
 ```
 
-原则：**先协议与编排，后平台广度；先可靠入库，后漂亮 UI。**
+原则：**Go 先稳住系统内核；TS 后接界面与浏览器；先协议与编排，后平台广度。**
 
 ---
 
-## 选型待议（阻塞 M0-03 / M1-01）
+## 技术栈决策记录（M0-03 关闭）
 
-以下需与产品方确认后，回写 `ARCHITECTURE.md` 并勾选 M0-03。
+### 最终方案
 
-### A. 运行时形态
+```text
+Hub / Daemon        Go
+├─ Orchestrator · Job Queue · Registry · Runner
+├─ SQLite · REST / WebSocket
+└─ AI Dispatcher
 
-| 选项 | 优点 | 代价 |
-|------|------|------|
-| A1 本地 Daemon + 薄 UI/扩展 | 清晰、可 headless | 多进程运维 |
-| A2 Electron/Tauri 一体应用 | 分发简单、体验完整 | 体积与耦合 |
-| A3 CLI-first，UI 后置 | 最快验证架构 | 早期体验弱 |
+前端生态            Bun + TypeScript
+├─ React + Vite · Chrome Extension
+├─ packages/protocol（类型 / Schema）
+└─ 测试 / 构建
 
-### B. Hub 主语言
+外部 Collector      yt-dlp / OpenCLI / loop-bilibili / …
+远期桌面            Wails + Go + React
+```
 
-| 选项 | 优点 | 代价 |
-|------|------|------|
-| B1 TypeScript（Node/Bun） | 与扩展/Web UI 同构；类型好 | 调 Python CLI 需子进程 |
-| B2 Python | 贴合 yt-dlp/数据脚本生态 | UI/扩展需另一栈 |
-| B3 混合：TS Hub + Python collectors | 各取所长 | 双语言复杂度 |
+### 对照表
 
-### C. 存储
+| 维度 | 结论 | 曾备选 |
+|------|------|--------|
+| 运行时 | 本地 Go Daemon + 薄客户端 | Electron 一体、纯 CLI |
+| Hub | **Go** | 全 Bun/TS Hub、Python Daemon |
+| UI/扩展 | **Bun + TS（React + Vite）** | 无 UI、Tauri 优先 |
+| 存储 | SQLite + 外置大对象 | 纯文件 |
+| 首站 | 通用网页 → 知乎 | 字幕向优先 |
+| AI MVP | OpenAI 兼容多 baseURL | 网页注入双路径（后置） |
+| 包管理 | Go modules + Bun | pnpm/Node 亦可，默认 Bun |
 
-| 选项 | 优点 | 代价 |
-|------|------|------|
-| C1 SQLite + `data/raw|md` 文件 | 查询强、备份易 | 需 migration |
-| C2 纯文件系统 + JSON/MD | 极简可观测 | 列表/检索弱 |
-| C3 SQLite 为主，大对象外置 | 平衡 | 路径一致性要规范 |
+### 方案评分（决策依据）
 
-### D. 首批 MVP 站点
+| 方案 | 推荐度 | 备注 |
+|------|--------|------|
+| **Go + Bun/TS** | ★★★★★ | 系统并发/子进程 vs 界面浏览器，边界清晰 |
+| 全 Bun/TS | ★★★★☆ | MVP 最快；Daemon 长期运维弱于 Go |
+| Go + Node/pnpm | ★★★★☆ | 更保守；与 Bun 生态取舍 |
+| Rust + TS | ★★★ | MVP 复杂度不值 |
+| Python + TS | ★★★ | 仅强依赖 Python 内嵌时 |
 
-| 选项 | 说明 |
-|------|------|
-| D1 通用网页 + OpenCLI/DOM | 覆盖面广，语义浅 |
-| D2 知乎回答 | 验证 adapter/collector 解耦 |
-| D3 B站/YouTube 字幕 | 验证专用工具链与策略链 |
+### 仍可微调（不阻塞 M1）
 
-### E. 前端 / Hub UI
-
-| 选项 | 说明 |
-|------|------|
-| E1 本地 Web（React/Vue + 本地 API） | 迭代快，与扩展技术近 |
-| E2 Tauri + Web 前端 | 桌面感强 |
-| E3 暂无 UI，CLI + 文件打开 | 最快 |
-
-### F. AI
-
-| 选项 | 说明 |
-|------|------|
-| F1 仅 OpenAI 兼容 API | 实现简单 |
-| F2 多厂商适配层 | 更符合 Multi-AI Dispatcher |
-| F3 API + 网页注入双路径 | 对齐 v001，工作量大 |
+- 首站切片粒度、默认 AI provider、Schema→Go 生成与否、Browser Runner 通道形态  
 
 ---
 
@@ -222,6 +220,7 @@ M0 文档与栈
 | 日期 | 变更 |
 |------|------|
 | 2026-08-10 | 初版：由 v001 / ARCHITECTURE 拆分里程碑与选型待议 |
+| 2026-08-10 | 锁定 Go Hub + Bun/TS 客户端；M0-03 done；M1 按 Go monorepo 细化 |
 
 ---
 
