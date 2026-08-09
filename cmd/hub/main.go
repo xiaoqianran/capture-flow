@@ -9,12 +9,13 @@ import (
 
 	"github.com/xiaoqianran/capture-flow/internal/adapter"
 	fakeadapter "github.com/xiaoqianran/capture-flow/internal/adapter/fake"
+	genericweb "github.com/xiaoqianran/capture-flow/internal/adapter/genericweb"
 	zhihuadapter "github.com/xiaoqianran/capture-flow/internal/adapter/zhihu"
 	"github.com/xiaoqianran/capture-flow/internal/api"
 	"github.com/xiaoqianran/capture-flow/internal/orchestrator"
+	"github.com/xiaoqianran/capture-flow/internal/runner"
 	clirunner "github.com/xiaoqianran/capture-flow/internal/runner/cli"
 	fakerunner "github.com/xiaoqianran/capture-flow/internal/runner/fake"
-	"github.com/xiaoqianran/capture-flow/internal/runner"
 	"github.com/xiaoqianran/capture-flow/internal/store"
 )
 
@@ -39,9 +40,10 @@ func main() {
 	}
 	defer st.Close()
 
-	// Registry order: site adapters first; fake only matches fake:// URLs.
+	// Registry order: specific sites → catch-all generic-web → fixture fake.
 	adapters := []adapter.Adapter{
 		zhihuadapter.New(),
+		genericweb.New(),
 		fakeadapter.New(),
 	}
 
@@ -58,7 +60,7 @@ func main() {
 	server := api.New(orch)
 
 	log.Printf("capture-flow hub listening on http://%s (data=%s)", *addr, absData)
-	log.Printf("M2 path: POST /jobs → ZhihuAdapter → OpenCLI Runner → ContentPacket → SQLite")
+	log.Printf("adapters: zhihu → generic-web → fake | collector: opencli")
 	if err := http.ListenAndServe(*addr, server.Handler()); err != nil {
 		log.Fatalf("listen: %v", err)
 	}
