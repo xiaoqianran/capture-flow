@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**M0 收尾 → M1 Go Hub 骨架**。
+当前焦点：**M1 假数据通路已跑通 → 准备 M2 知乎 + OpenCLI**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -31,10 +31,10 @@
 | M0-01 | 沉淀 `ARCHITECTURE.md` | P0 | done | 从 v001 延伸 |
 | M0-02 | 沉淀 `TASKS.md` | P0 | done | 本文 |
 | M0-03 | 技术栈选型讨论并锁定 | P0 | done | Go Hub + Bun/TS 客户端 |
-| M0-04 | Commit / PR / 目录约定 | P0 | todo | 阿里规范；落地 monorepo 骨架属 M1-01 |
-| M0-05 | 最小 README（产品一句话 + 如何跑） | P1 | todo | 写明 Go / Bun 双工具链 |
-| M0-06 | ContentPacket JSON Schema 初版 | P0 | todo | `schemas/` + `schema_version` |
-| M0-07 | 错误码与 Job 状态机枚举 | P0 | todo | 可恢复 / 不可恢复；跨 Go/TS 同源 |
+| M0-04 | Commit / PR / 目录约定 | P0 | done | 阿里规范 commit；Go monorepo 已落地 |
+| M0-05 | 最小 README（产品一句话 + 如何跑） | P1 | done | 见 README.md |
+| M0-06 | ContentPacket JSON Schema 初版 | P0 | done | `schemas/content-packet.schema.json` |
+| M0-07 | 错误码与 Job 状态机枚举 | P0 | done | `schemas/job.schema.json` + `error-codes.md` + `internal/domain` |
 
 ---
 
@@ -42,18 +42,19 @@
 
 | ID | 任务 | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| M1-01 | 初始化 monorepo：`cmd/hub`、`internal/*`、`web/`、`packages/protocol` | P0 | todo | M0-03 |
-| M1-02 | 协议：JSON Schema + TS 类型；Go struct 对齐 | P0 | todo | M0-06 |
-| M1-03 | Orchestrator：内存队列 + Job 状态机（Go） | P0 | todo | M1-02 |
-| M1-04 | FakeAdapter + FakeRunner 通路（Go） | P0 | todo | M1-03 |
-| M1-05 | Store：SQLite 元数据 + Packet/文件落盘 | P0 | todo | M1-02 |
-| M1-06 | 集成测试：假 URL → ContentPacket（`go test`） | P0 | todo | M1-04, M1-05 |
-| M1-07 | 结构化日志 / Job trace 字段 | P1 | todo | M1-03 |
-| M1-08 | 最小 REST：`POST /jobs`、`GET /jobs/:id`、`GET /docs/:id`（轮询即可） | P0 | todo | M1-03, M1-05 |
+| M1-01 | 初始化 monorepo：`cmd/hub`、`internal/*` | P0 | done | M0-03 |
+| M1-02 | 协议：JSON Schema + Go struct 对齐 | P0 | done | M0-06 |
+| M1-03 | Orchestrator：异步 Job 状态机（Go） | P0 | done | M1-02 |
+| M1-04 | FakeAdapter + FakeRunner 通路（Go） | P0 | done | M1-03 |
+| M1-05 | Store：SQLite 元数据 + Packet/文件落盘 | P0 | done | M1-02 |
+| M1-06 | 集成测试：假 URL → ContentPacket（`go test`） | P0 | done | M1-04, M1-05 |
+| M1-07 | 结构化日志 / Job trace 字段 | P1 | done | Job.trace 已贯通 |
+| M1-08 | 最小 REST：`POST /jobs`、`GET /jobs/:id`、`GET /docs/:id`（轮询） | P0 | done | M1-03, M1-05 |
 | M1-09 | WebSocket：Job 状态推送 | P2 | todo | 非 M1；REST 轮询足够 |
 
 **M1 真正目标**：`Job → Adapter → Runner → Packet → SQLite`（假数据贯通）。  
-**退出**：`curl POST /jobs` → FakeAdapter → FakeRunner → ContentPacket → SQLite，可 `GET` 查回。
+**退出**：`curl POST /jobs` → FakeAdapter → FakeRunner → ContentPacket → SQLite，可 `GET` 查回。  
+**退出证据（2026-08-10）**：`go test ./...` 通过；本地 `POST /jobs` → status=`done`，`GET /docs/{id}` 返回 `schema_version=1.0.0`、`collector=opencli`。
 ---
 
 ## M2 — 真实采集 MVP（首站：知乎）
@@ -226,6 +227,7 @@ Hub / Daemon        Go
 | 2026-08-10 | 初版：由 v001 / ARCHITECTURE 拆分里程碑与选型待议 |
 | 2026-08-10 | 锁定 Go Hub + Bun/TS 客户端；M0-03 done；M1 按 Go monorepo 细化 |
 | 2026-08-10 | v1 基线：OpenCLI-only、知乎优先、M1 无 WS、schema_version；开工 M1 |
+| 2026-08-10 | M0-06/07 + M1 假数据 REST 通路跑通（FakeAdapter/Runner → SQLite） |
 
 ---
 
