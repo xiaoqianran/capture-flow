@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**去重 + 通用网页 + capture CLI 已落地 → 可做 M4 AI 或 Extension**。
+当前焦点：**M4 AI 假跑已通 → 接真实 API Key 或做 Extension / UI**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -96,16 +96,16 @@
 
 | ID | 任务 | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| M4-01 | Recipe 模型（输入绑定 + prompt 模板） | P0 | todo | M2-07 |
-| M4-02 | Prompt Builder（注入 Packet 字段） | P0 | todo | M4-01 |
-| M4-03 | Dispatcher：OpenAI 兼容 API 优先 | P0 | todo | M4-02 |
-| M4-04 | Response Store（关联 revision + recipe） | P0 | todo | M4-03 |
+| M4-01 | Recipe 模型（输入绑定 + prompt 模板） | P0 | done | builtin: summarize/outline/qa-prep |
+| M4-02 | Prompt Builder（注入 Packet 字段） | P0 | done | `{{title}}` 等占位符 |
+| M4-03 | Dispatcher：OpenAI 兼容 API 优先 | P0 | done | `/chat/completions` + `-fake-ai` |
+| M4-04 | Response Store（关联 revision + recipe） | P0 | done | SQLite + `data/ai_responses/*.md` |
 | M4-05 | 流式输出 + 取消 | P1 | todo | M4-03 |
 | M4-06 | 网页注入兜底（明确能力边界） | P2 | todo | M4-03 |
-| M4-07 | 导出 Markdown / 简易 HTML | P1 | todo | M4-04 |
+| M4-07 | 导出 Markdown / 简易 HTML | P1 | done | 响应落盘 `.md` |
 
-**退出**：对一份 Packet 跑默认 Recipe，得到可打开的回答文件。
-
+**退出**：对一份 Packet 跑默认 Recipe，得到可打开的回答文件。  
+**退出证据**：`POST /ai/run` + `capture ai <doc>`；文件 `data/ai_responses/ai_*.md`。
 ---
 
 ## M5 — Trigger：CLI + Chrome
@@ -230,6 +230,7 @@ Hub / Daemon        Go
 | 2026-08-10 | M0-06/07 + M1 假数据 REST 通路跑通（FakeAdapter/Runner → SQLite） |
 | 2026-08-10 | M2：CLI OpenCLI Runner + ZhihuAdapter；真实回答端到端 done |
 | 2026-08-10 | M2-05 去重 + generic-web + cmd/capture 客户端 |
+| 2026-08-10 | M4 AI：Recipe + OpenAI 兼容 Dispatcher + Response 存储 |
 
 ---
 

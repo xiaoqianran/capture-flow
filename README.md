@@ -12,7 +12,8 @@
 | 通用网页 | `generic-web` + `opencli web read --stdout` |
 | 假数据 | `fake://…`（或 `-fake-runner`） |
 | 去重 | 同 `document_id` + 同 `content_hash` 不写新 revision |
-| 客户端 | `go run ./cmd/capture <url>` |
+| AI | OpenAI 兼容 `/chat/completions`；内置 summarize/outline/qa-prep |
+| 客户端 | `go run ./cmd/capture <url>` / `capture ai <doc>` |
 
 ```text
 Registry: zhihu → generic-web → fake
@@ -26,25 +27,37 @@ Collector: opencli only
 ```bash
 go test ./...
 go run ./cmd/hub -addr 127.0.0.1:8080 -data data
-# 开发假跑：go run ./cmd/hub -fake-runner
+
+# 全假跑（不依赖 opencli / 模型 API）
+go run ./cmd/hub -fake-runner -fake-ai
+
+# 真实 AI（OpenAI 兼容）
+# set CAPTURE_FLOW_AI_API_KEY=sk-...
+# set CAPTURE_FLOW_AI_BASE_URL=https://api.openai.com/v1
+# set CAPTURE_FLOW_AI_MODEL=gpt-4o-mini
+go run ./cmd/hub
 ```
 
 另开终端：
 
 ```bash
-# 推荐：capture 客户端（提交并等待）
 go run ./cmd/capture "https://www.zhihu.com/question/<qid>/answer/<aid>"
 go run ./cmd/capture "https://example.com"
-go run ./cmd/capture job <job_id>
-go run ./cmd/capture doc <document_id>
+go run ./cmd/capture fake://demo
 
-# 或 curl
-curl -s -X POST http://127.0.0.1:8080/jobs \
+go run ./cmd/capture recipes
+go run ./cmd/capture ai <document_id> -recipe summarize
+go run ./cmd/capture ai-list <document_id>
+go run ./cmd/capture ai-show <response_id>
+
+curl -s -X POST http://127.0.0.1:8080/ai/run \
   -H "Content-Type: application/json" \
-  -d "{\"url\":\"fake://demo\"}"
+  -d "{\"document_id\":\"doc_xxx\",\"recipe_id\":\"summarize\"}"
 ```
 
-**说明**：知乎仅问题页（无 `/answer/<id>`）会被拒绝。重复捕获且内容未变时 Job trace 含 `dedup:same_hash`。## 文档
+**说明**：知乎仅问题页（无 `/answer/<id>`）会被拒绝。重复捕获且内容未变时 Job trace 含 `dedup:same_hash`。AI 结果写入 `data/ai_responses/*.md`。
+
+## 文档
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — v1 架构基线
 - [TASKS.md](./TASKS.md) — 里程碑与任务
@@ -59,7 +72,8 @@ internal/
   adapter/         zhihu · generic-web · fake
   runner/          cli (opencli) · fake
   orchestrator/    Job 状态机 + 去重
-  store/           SQLite + packet 文件
+  ai/              Recipe · Prompt · Dispatcher · Service
+  store/           SQLite + packet / ai_responses 文件
   api/             REST
   domain/          类型 / 状态 / 错误码
 schemas/           JSON Schema
