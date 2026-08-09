@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**M2 知乎 + OpenCLI 已跑通 → 可扩通用网页 / AI / UI**。
+当前焦点：**去重 + 通用网页 + capture CLI 已落地 → 可做 M4 AI 或 Extension**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -67,8 +67,8 @@
 | M2-02 | 知乎 Adapter（plan + normalize） | P0 | done | answer-detail；article download 初版 |
 | M2-03 | 接入 OpenCLI（唯一真实 collector） | P0 | done | Hub 默认 CLI Runner |
 | M2-04 | document_id / content_hash 规则 | P0 | done | `domain.DocumentID` / `ContentHash` |
-| M2-05 | Dedup：同 hash 跳过写 revision | P1 | todo | M2-04 |
-| M2-06 | Raw 归档策略（保留/轮转） | P1 | todo | M1-05 |
+| M2-05 | Dedup：同 hash 跳过写 revision | P1 | done | `SavePacketIfChanged` + trace `dedup:same_hash` |
+| M2-06 | Raw 归档策略（保留/轮转） | P1 | todo | 旧 revision 文件仍保留，未做轮转 |
 | M2-07 | 端到端：真实 URL → Library 可打开 | P0 | done | 真实知乎回答 → Packet 入库 |
 
 **退出**：对 3 个真实样例 URL 稳定成功 ≥ 2/3。  
@@ -84,7 +84,7 @@
 | M3-03 | 失败换下一候选（非盲目重试） | P0 | todo | M3-02 |
 | M3-04 | Collector 健康分 / 简单熔断 | P1 | todo | M3-03 |
 | M3-05 | （不设 Browser Runner）v1 不接 DOM/Playwright 插件 | — | cancelled | 仅 OpenCLI |
-| M3-06 | 第二平台：通用网页 Adapter | P1 | todo | M2 |
+| M3-06 | 第二平台：通用网页 Adapter | P1 | done | `generic-web` + `opencli web read --stdout` |
 | M3-06b | 第三平台：B站 / YouTube Adapter | P2 | todo | M3-06 |
 | M3-07 | 平台×任务 strategy 配置表 | P0 | todo | M3-01 |
 
@@ -112,8 +112,8 @@
 
 | ID | 任务 | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| M5-01 | CLI：`capture` / `job status` / `doc show` | P0 | todo | M2 |
-| M5-02 | 本地 HTTP API（触发采集 + 查询） | P0 | todo | M1 |
+| M5-01 | CLI：`capture` / `job` / `doc` / `health` | P0 | done | `cmd/capture` |
+| M5-02 | 本地 HTTP API（触发采集 + 查询） | P0 | done | POST/GET jobs + docs |
 | M5-03 | Chrome Extension：当前页捕获 | P0 | todo | M5-02 |
 | M5-04 | Extension：选中文本捕获 | P1 | todo | M5-03 |
 | M5-05 | Schedule 触发器（cron 式） | P2 | todo | M5-01 |
@@ -229,6 +229,7 @@ Hub / Daemon        Go
 | 2026-08-10 | v1 基线：OpenCLI-only、知乎优先、M1 无 WS、schema_version；开工 M1 |
 | 2026-08-10 | M0-06/07 + M1 假数据 REST 通路跑通（FakeAdapter/Runner → SQLite） |
 | 2026-08-10 | M2：CLI OpenCLI Runner + ZhihuAdapter；真实回答端到端 done |
+| 2026-08-10 | M2-05 去重 + generic-web + cmd/capture 客户端 |
 
 ---
 
