@@ -1,6 +1,9 @@
 import type { AIResponse, ContentPacket, DocumentSummary, Health, Job, Recipe } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+// Dev: Vite proxies /api → :8080. Prod (served by hub): same-origin API at root.
+const API_BASE =
+  import.meta.env.VITE_API_BASE ??
+  (import.meta.env.DEV ? "/api" : "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {

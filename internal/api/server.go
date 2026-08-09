@@ -3,6 +3,9 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,19 +17,29 @@ import (
 
 // Server exposes REST endpoints for the hub.
 type Server struct {
-	orch *orchestrator.Orchestrator
-	ai   *ai.Service
-	mux  *http.ServeMux
+	orch   *orchestrator.Orchestrator
+	ai     *ai.Service
+	mux    *http.ServeMux
+	webDir string // optional static UI root (e.g. web/dist)
 }
 
 func New(orch *orchestrator.Orchestrator, aiSvc *ai.Service) *Server {
-	s := &Server{orch: orch, ai: aiSvc, mux: http.NewServeMux()}
+	return NewWithWeb(orch, aiSvc, "")
+}
+
+// NewWithWeb creates a server that also serves a built Local Hub UI from webDir when non-empty.
+func NewWithWeb(orch *orchestrator.Orchestrator, aiSvc *ai.Service, webDir string) *Server {
+	s := &Server{orch: orch, ai: aiSvc, mux: http.NewServeMux(), webDir: strings.TrimSpace(webDir)}
 	s.routes()
 	return s
 }
 
 func (s *Server) Handler() http.Handler {
-	return withCORS(s.mux)
+	api := withCORS(s.mux)
+	if s.webDir == "" {
+		return api
+	}
+	return withStaticUI(api, s.webDir)
 }
 
 func (s *Server) routes() {
@@ -69,6 +82,47 @@ func isLocalOrigin(origin string) bool {
 		strings.HasPrefix(origin, "http://localhost:") ||
 		origin == "http://127.0.0.1" ||
 		origin == "http://localhost"
+}
+
+func withStaticUI(api http.Handler, webDir string) http.Handler {
+	fs := http.FileServer(http.Dir(webDir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isAPIPath(r.URL.Path) {
+			api.ServeHTTP(w, r)
+			return
+		}
+		// Prefer real files under webDir; SPA fallback to index.html.
+		rel := path.Clean("/" + r.URL.Path)
+		if rel == "/" {
+			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+			return
+		}
+		full := filepath.Join(webDir, filepath.FromSlash(strings.TrimPrefix(rel, "/")))
+		if info, err := os.Stat(full); err == nil && !info.IsDir() {
+			fs.ServeHTTP(w, r)
+			return
+		}
+		// asset 404 should stay 404; unknown routes get SPA shell
+		if strings.HasPrefix(rel, "/assets/") {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+	})
+}
+
+func isAPIPath(p string) bool {
+	p = path.Clean("/" + p)
+	switch {
+	case p == "/health", p == "/jobs", p == "/docs", p == "/recipes", p == "/ai/run":
+		return true
+	case strings.HasPrefix(p, "/jobs/"),
+		strings.HasPrefix(p, "/docs/"),
+		strings.HasPrefix(p, "/ai/"):
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

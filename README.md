@@ -73,16 +73,22 @@ go run ./cmd/hub -addr 127.0.0.1:8080 -data data
 
 ## Local Hub Web UI
 
-```bash
-# 终端 1
-go run ./cmd/hub -addr 127.0.0.1:8080 -data data
+**单进程（推荐）**：
 
-# 终端 2
-cd web && bun install && bun run dev
-# → http://127.0.0.1:5173  （/api 代理到 :8080）
+```bash
+cd web && bun install && bun run build
+go run ./cmd/hub -addr 127.0.0.1:8080 -data data
+# 打开 http://127.0.0.1:8080/  （Hub 托管 web/dist）
 ```
 
-详见 [web/README.md](./web/README.md)。新增列表 API：`GET /jobs`、`GET /docs`。
+**热更新开发**：
+
+```bash
+go run ./cmd/hub -addr 127.0.0.1:8080 -data data
+cd web && bun run dev   # http://127.0.0.1:5173 ，/api → :8080
+```
+
+`-web-dir` 默认 `web/dist`；`-web-dir=-` 关闭 UI。详见 [web/README.md](./web/README.md)。
 
 ## 文档
 

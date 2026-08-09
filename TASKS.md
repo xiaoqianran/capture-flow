@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**Local Hub Web UI 已可跑 → 可选静态托管进 Hub / 选中文本 / 流式 AI**。
+当前焦点：**单进程 Hub+UI 已通 → 可选选中文本捕获 / AI 流式 / 版本时间线**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -233,6 +233,7 @@ Hub / Daemon        Go
 | 2026-08-10 | M4 AI：Recipe + OpenAI 兼容 Dispatcher + Response 存储 |
 | 2026-08-10 | M5-03 Chrome Extension：当前页捕获 + 可选 AI |
 | 2026-08-10 | M6 Local Hub Web UI + GET /jobs|/docs 列表 + CORS |
+| 2026-08-10 | Hub 托管 web/dist，单端口同域 UI+API |
 
 ---
 

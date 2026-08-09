@@ -21,4 +21,17 @@ bun run dev
 - **Jobs**：Job 状态 / trace
 - **Capture**：提交 URL
 
-API 前缀默认 `/api`（见 `vite.config.ts` proxy → `:8080`）。
+API 前缀：
+
+- 开发：`/api`（Vite proxy → `:8080`）
+- 生产：同域根路径（由 Hub 托管 `web/dist`）
+
+## 单进程托管（推荐）
+
+```bash
+cd web && bun install && bun run build
+go run ./cmd/hub -addr 127.0.0.1:8080 -data data
+# 浏览器打开 http://127.0.0.1:8080/
+```
+
+`-web-dir` 默认 `web/dist`；传 `-web-dir=-` 可关闭 UI。
