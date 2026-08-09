@@ -319,21 +319,124 @@ Capture Flow
 
 ---
 
-## 9. 模块边界（逻辑包）
+## 9. 技术栈（已锁定）
 
+> **一句话**：**Go 管「系统」；Bun/TypeScript 管「界面和浏览器」。**
+
+### 9.1 选型结论
+
+| 维度 | 决策 | 说明 |
+|------|------|------|
+| 运行时形态 | **本地 Daemon + 薄 UI / 扩展** | Hub 长期常驻；CLI / Extension / Web 均连本机 API |
+| Hub 主语言 | **Go** | 并发任务、子进程、超时取消、调度、常驻服务 |
+| 前端生态 | **Bun + TypeScript** | Web UI、Chrome Extension、共享类型、测试与构建 |
+| 存储 | **SQLite + 大对象外置文件** | 索引/Job/去重在 SQLite；raw / md 落 `data/` |
+| 通信 | **REST + WebSocket** | 命令与查询走 REST；Job 进度 / AI 流式走 WS |
+| 外部 Collector | **进程外包** | yt-dlp、OpenCLI、loop-bilibili 及其他 CLI/Python |
+| AI（MVP） | **OpenAI 兼容多 baseURL** | Dispatcher 适配层；网页注入后置 |
+| 首站 MVP | **通用网页 → 知乎** | 先打通链路，再验证 adapter/collector 解耦 |
+| 桌面封装（远期） | **Wails + Go + React** | 与 Go Hub 同栈，避免 Electron 过重 |
+
+**明确不选（MVP）**：全量 Bun 做 Hub、Rust 重写核心、Python 做 Daemon、Electron 一体应用。
+
+### 9.2 职责切分
+
+```text
+Hub / Daemon        Go
+├─ Orchestrator
+├─ Job Queue
+├─ Adapter Registry
+├─ Runner（CLI / Native / Browser bridge）
+├─ SQLite + 文件存储
+├─ REST / WebSocket API
+└─ AI Dispatcher（HTTP client）
+
+前端生态            Bun + TypeScript
+├─ React + Vite（Local Hub UI）
+├─ Chrome Extension
+├─ packages/protocol（Adapter SDK 类型 / JSON Schema）
+└─ 测试 / 构建 / lint
+
+外部 Collector      独立进程
+├─ yt-dlp
+├─ OpenCLI
+├─ loop-bilibili
+└─ 其他 CLI / Python
 ```
+
+| 组件 | 技术 | 边界 |
+|------|------|------|
+| Daemon | Go | 编排、队列、Registry、Runner、Store、API |
+| `capture` CLI | Go（同一模块或 `cmd/capture`） | 调本机 API 或直连 orchestrator |
+| Web UI | React + Vite + Bun | 只消费 REST/WS，不嵌采集逻辑 |
+| Extension | TS + Bun 构建 | 触发捕获、选中文本；DOM 兜底采集经协议上报 |
+| Protocol | JSON Schema + TS 类型（可由 schema 生成） | ContentPacket / Job / Plan 跨语言契约 |
+| Go 侧契约 | 手写 struct + 校验，或 schema 生成 | 与 protocol 包版本对齐 |
+| Collectors | 外部二进制 | Hub 只传参、管生命周期、收 RawResult |
+
+### 9.3 仓库物理布局（目标 monorepo）
+
+```text
 capture-flow/
-  trigger/          # extension bridge, cli, http api, scheduler
-  orchestrator/     # job, queue, dedup, retry, registry
-  adapters/         # zhihu, bilibili, youtube, generic-web...
-  runners/          # cli, native, browser
-  store/            # content packet, revision, raw, index
-  ai/               # recipe, prompt, dispatcher, response store
-  viewer/           # md / mermaid / html render
-  shared/           # types, errors, logging, config
+├── cmd/
+│   ├── hub/                 # Go daemon 入口
+│   └── capture/             # Go CLI 入口
+├── internal/                # Go 私有实现
+│   ├── orchestrator/
+│   ├── registry/
+│   ├── adapter/             # 站点语义（plan + normalize）
+│   ├── runner/              # CLI / browser bridge
+│   ├── store/
+│   ├── ai/
+│   └── api/                 # REST + WebSocket
+├── pkg/                     # 可选：对外 Go 库
+├── web/                     # React + Vite（Bun）
+├── extension/               # Chrome Extension（Bun）
+├── packages/
+│   └── protocol/            # JSON Schema + TS 类型（Adapter SDK）
+├── data/                    # 本地运行时数据（gitignore）
+├── schemas/                 # 权威 ContentPacket 等 schema（可与 protocol 同源）
+├── ARCHITECTURE.md
+├── TASKS.md
+└── go.mod
 ```
 
-物理仓库布局与实现语言在技术栈确定后落地（见 TASKS / 技术选型讨论）。
+契约流：
+
+```text
+schemas/*.json  ──►  packages/protocol（TS）
+                 └──► internal 校验 / Go struct（生成或手写同步）
+```
+
+### 9.4 运行时关系
+
+```text
+Chrome Ext / Web UI / CLI
+        │  REST + WebSocket (localhost)
+        ▼
+   Go Hub Daemon
+        │  CapturePlan
+        ▼
+   Runner ── subprocess ──► yt-dlp / OpenCLI / ...
+        │
+        ▼
+   SQLite + data/raw|md
+        │
+        ▼
+   AI Providers (OpenAI-compatible)
+```
+
+### 9.5 模块边界（逻辑包 ↔ 实现）
+
+| 逻辑层 | 实现位置 |
+|--------|----------|
+| ① Trigger | `extension/`、`cmd/capture`、`internal/api`、scheduler |
+| ② Orchestrator | `internal/orchestrator` |
+| ③ Source Adapter | `internal/adapter/*` |
+| ④ Runner | `internal/runner/*` |
+| ⑤ Content Store | `internal/store` |
+| ⑥ AI Pipeline | `internal/ai` + `web` Viewer |
+| 共享协议 | `schemas/` + `packages/protocol` |
 
 ---
 
@@ -349,19 +452,32 @@ capture-flow/
 | ContentPacket 升级 | §4.2 |
 | collector ≠ adapter | §3.2 |
 | Trigger→…→ContentPacket | §1.1 / §4.1 |
+| Multi-AI / API 优先 | §5.6、§9.1 |
 
 ---
 
-## 11. 开放问题（实现前需拍板）
+## 11. 已关闭与仍开放的问题
 
-1. **运行时形态**：纯本地服务 + 扩展 / Electron 一体 / 无 UI 纯 CLI 优先？  
-2. **主语言**：Hub 用 TypeScript 还是 Python（与 yt-dlp/OpenCLI 生态贴合度 vs 扩展一体性）？  
-3. **存储引擎**：SQLite + 文件系统 vs 纯文件目录？  
-4. **首批 Adapter 范围**：知乎 / B站 / YouTube / 通用网页 的 MVP 边界？  
-5. **AI Provider**：仅 OpenAI 兼容 API，还是内置多厂商 + 网页注入？  
+### 已锁定
 
-> 技术栈协商见对话；确认后写入本文 §9 实现映射与 `TASKS.md` 里程碑。
+| 议题 | 结论 |
+|------|------|
+| 运行时 | 本地 Go Daemon + 薄客户端 |
+| Hub 语言 | **Go**（非 Bun Hub） |
+| UI / 扩展 | **Bun + TypeScript**（React + Vite） |
+| 存储 | SQLite + 外置大对象 |
+| 通信 | REST + WebSocket |
+| Collector | 外部 CLI/进程，Go Runner 托管 |
+| 远期桌面 | Wails + Go + React（非 MVP） |
+
+### 实现前仍可微调（不阻塞 M1）
+
+1. **首站顺序**：通用网页（OpenCLI/DOM）与知乎的先后切片粒度  
+2. **AI 厂商列表**：MVP 默认 provider 集合与密钥存放路径  
+3. **Browser Runner**：Extension 消息通道 vs 后期 Playwright 进程  
+4. **Schema 同步方式**：手写 Go struct vs 从 JSON Schema 代码生成  
+5. **Go 模块路径 / 包管理工具版本**（go version、bun version）  
 
 ---
 
-*Document status: draft derived from `v001.txt`. Update when stack is locked.*
+*Document status: architecture + stack locked (Go Hub · Bun/TS clients). Update when M1 layout lands in repo.*
