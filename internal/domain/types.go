@@ -34,14 +34,19 @@ type ContentPacket struct {
 }
 
 // CapturePlan is a declarative execution plan from an adapter.
+// Runner executes Args against Binary (default opencli); Adapter must not spawn processes.
 type CapturePlan struct {
-	Target         CaptureTarget       `json:"target"`
-	Adapter        string              `json:"adapter"`
-	AdapterVersion string              `json:"adapter_version"`
-	Collector      string              `json:"collector"`
-	Params         map[string]string   `json:"params,omitempty"`
-	RequiredFields []string            `json:"required_fields,omitempty"`
-	TimeoutMS      int                 `json:"timeout_ms,omitempty"`
+	Target         CaptureTarget     `json:"target"`
+	Adapter        string            `json:"adapter"`
+	AdapterVersion string            `json:"adapter_version"`
+	Collector      string            `json:"collector"`
+	// Binary is the collector executable. Empty means runner default (opencli).
+	Binary string `json:"binary,omitempty"`
+	// Args are argv after the binary, e.g. ["zhihu","answer-detail",url,"-f","json"].
+	Args           []string          `json:"args,omitempty"`
+	Params         map[string]string `json:"params,omitempty"`
+	RequiredFields []string          `json:"required_fields,omitempty"`
+	TimeoutMS      int               `json:"timeout_ms,omitempty"`
 }
 
 // RawResult is runner output before normalize.

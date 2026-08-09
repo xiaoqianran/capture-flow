@@ -1,8 +1,6 @@
 package fake
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -19,7 +17,12 @@ func (a *Adapter) Name() string    { return "fake" }
 func (a *Adapter) Version() string { return "1.0.0" }
 
 func (a *Adapter) CanHandle(target domain.CaptureTarget) bool {
-	return strings.TrimSpace(target.URL) != ""
+	u := strings.TrimSpace(target.URL)
+	if u == "" {
+		return false
+	}
+	// Fixture only — must not steal real site URLs in production registry order.
+	return strings.HasPrefix(u, "fake://") || strings.Contains(u, "example.com/fake")
 }
 
 func (a *Adapter) Plan(target domain.CaptureTarget) (domain.CapturePlan, error) {
@@ -62,15 +65,10 @@ func (a *Adapter) Normalize(raw domain.RawResult, plan domain.CapturePlan) (doma
 		body = "empty fixture body"
 	}
 
-	docID := documentID(plan.Target.URL, "page")
-	revID := fmt.Sprintf("rev_%d", time.Now().UTC().UnixNano())
-	hash := contentHash(body)
-	now := time.Now().UTC().Format(time.RFC3339)
-
 	return domain.ContentPacket{
 		SchemaVersion:  domain.ContentPacketSchemaVersion,
-		DocumentID:     docID,
-		RevisionID:     revID,
+		DocumentID:     domain.DocumentID(plan.Target.URL, "page"),
+		RevisionID:     domain.RevisionID(),
 		Source:         a.Name(),
 		Type:           "page",
 		URL:            plan.Target.URL,
@@ -81,17 +79,7 @@ func (a *Adapter) Normalize(raw domain.RawResult, plan domain.CapturePlan) (doma
 		Collector:      domain.CollectorOpenCLI,
 		Adapter:        a.Name(),
 		AdapterVersion: a.Version(),
-		CapturedAt:     now,
-		ContentHash:    hash,
+		CapturedAt:     time.Now().UTC().Format(time.RFC3339),
+		ContentHash:    domain.ContentHash(body),
 	}, nil
-}
-
-func documentID(url, docType string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(url) + "|" + docType))
-	return "doc_" + hex.EncodeToString(sum[:8])
-}
-
-func contentHash(content string) string {
-	sum := sha256.Sum256([]byte(content))
-	return "sha256:" + hex.EncodeToString(sum[:])
 }

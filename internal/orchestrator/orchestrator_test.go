@@ -24,7 +24,7 @@ func TestSubmitFakePipeline(t *testing.T) {
 
 	orch := orchestrator.New(st, []adapter.Adapter{fakeadapter.New()}, fakerunner.New())
 	job, err := orch.Submit(context.Background(), domain.CaptureTarget{
-		URL:  "https://example.com/fake",
+		URL:  "fake://demo",
 		Task: "full_text",
 	})
 	if err != nil {
