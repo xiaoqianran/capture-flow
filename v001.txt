@@ -1,0 +1,184 @@
+
+架构图
+          Personal AI Hub
+              ↓
+          Collector Layer
+              ├─ 专用工具：yt-dlp / 站点 CLI / API / loop-bilibili
+              ├─ 通用工具：OpenCLI
+              └─ 浏览器：Chrome Extension / Playwright
+              ↓
+          统一 Collector Adapter
+              ↓
+          Content Packet
+              ↓
+          Local Hub
+              ├─ Storage
+              ├─ Prompt
+              └─ Workflow
+              ↓
+          Multi-AI Dispatcher
+          API 优先 → 网页注入兜底
+              ↓
+          Response Store
+              ↓
+          Markdown / Mermaid / HTML
+      
+默认采集优先级：
+        官方 API / 成熟专用工具
+        > 自研专用 Collector
+        > OpenCLI
+        > Chrome Extension DOM
+        > Playwright
+
+核心原则
+
+      抓取能力外包。
+      数据协议自己掌握。
+      Hub 只负责编排、存储和 AI 分发。
+
+最大的一个架构问题：Adapter 不应该 build_command
+
+    你现在：
+      
+            class SourceAdapter:
+                def build_command(...)
+                def parse_output(...)
+
+    应该拆：
+    
+            Source Adapter
+            负责：
+            - 能不能处理 URL
+            - 要采什么
+            - 如何解析结果
+            - 输出 ContentPacket
+            
+            Runner
+            负责：
+            - CLI 怎么启动
+            - Python/native 怎么调用
+            - Browser 怎么执行
+            - timeout / kill / stdout / stderr
+
+    即：
+
+            ZhihuAdapter
+                 ↓
+            CapturePlan
+                 ↓
+            CLI Runner / Browser Runner
+                 ↓
+            raw result
+                 ↓
+            ZhihuAdapter.parse()
+                 ↓
+            ContentPacket
+
+
+    这样未来一个知乎 Adapter 可以同时：
+            OpenCLI
+            zhihu-cli
+            Chrome
+    而不需要三个重复 Adapter。
+
+
+
+第二个需要修改：不要固定 CLI > Native > Browser
+    应该是：
+        每个平台 + 每种任务拥有自己的 Strategy Chain
+
+
+      YouTube 字幕：yt-dlp → Browser fallback
+      
+      知乎文章：zhihu-cli / OpenCLI → Chrome DOM
+      
+      B站字幕：loop-bilibili → yt-dlp → Browser
+      
+      选中文本：Browser
+      
+      Registry 产出 CapturePlan
+      候选方案及评分：
+      [loop-bilibili (100), yt-dlp (80), browser (50)]
+      
+      Hub 选择 Collector 的依据
+      capability · 健康状态 · 用户偏好 · 登录状态 · 任务类型 · 历史成功率
+
+
+Content Packet 也稍微升级一下
+
+            {
+              "document_id": "...",
+              "revision_id": "...",
+            
+              "source": "zhihu",
+              "type": "answer",
+              "url": "...",
+            
+              "title": "...",
+              "author": "...",
+            
+              "content_md": "...",
+              "content_raw": "...",
+            
+              "collector": "opencli",
+              "adapter": "zhihu",
+              "adapter_version": "1.2",
+            
+              "captured_at": "...",
+              "content_hash": "..."
+            }
+
+
+    核心解耦：collector ≠ adapter
+    
+    这是非常重要的设计。adapter 绑定站点语义，collector 绑定采集技术，两者独立：
+    
+    adapter = zhihu → collector = opencli
+    
+    adapter = bilibili → collector = loop-bilibili
+    
+    以后更换采集技术，只需切换 collector，不会改变 Document 的语义。这正是 adapter 存在的价值。
+                
+
+最终架构就定成这 6 层
+      ① Trigger
+      Chrome / CLI / Schedule / API
+              ↓
+      ② Hub Orchestrator
+      Job / Queue / Retry / Dedup / Registry
+              ↓
+      ③ Source Adapter
+      识别目标 + CapturePlan + Normalize
+              ↓
+      ④ Runner
+      CLI / Native / Browser
+              ↓
+      ⑤ Canonical Content Store
+      ContentPacket + Revision + Raw
+              ↓
+      ⑥ AI Pipeline
+      Recipe → Prompt → AI Targets → Response → Viewer
+
+最核心的数据流：
+      CaptureTarget
+          ↓
+      CollectJob
+          ↓
+      CapturePlan
+          ↓
+      Runner
+          ↓
+      RawResult
+          ↓
+      SourceAdapter.normalize()
+          ↓
+      ContentPacket
+          ↓
+      Document Revision
+          ↓
+      Recipe / AI
+
+
+
+
+Trigger → Orchestrator → Adapter Registry → Runner → ContentPacket
