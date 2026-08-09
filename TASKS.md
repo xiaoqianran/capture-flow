@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**Extension 已可装 → 可选 Local Hub Web UI / 选中文本捕获 / 流式 AI**。
+当前焦点：**Local Hub Web UI 已可跑 → 可选静态托管进 Hub / 选中文本 / 流式 AI**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -127,12 +127,12 @@
 
 | ID | 任务 | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| M6-01 | IA：Jobs / Library / Recipes / Settings | P0 | todo | M0-03 |
-| M6-02 | Jobs 列表：状态、耗时、collector 轨迹 | P0 | todo | M5 |
-| M6-03 | Document 详情：版本时间线 + MD 预览 | P0 | todo | M2 |
-| M6-04 | AI 工作台：选 Recipe、流式、历史 Response | P1 | todo | M4 |
+| M6-01 | IA：Jobs / Library / Capture | P0 | done | `web/` React+Vite |
+| M6-02 | Jobs 列表：状态、collector 轨迹 | P0 | done | `GET /jobs` + UI |
+| M6-03 | Document 详情：MD 预览 | P0 | done | `GET /docs` + detail |
+| M6-04 | AI 工作台：选 Recipe、历史 Response | P1 | done | 非流式 Run AI |
 | M6-05 | Collectors 健康与登录提示 | P1 | todo | M3-04 |
-| M6-06 | 空态 / 加载 / 错误 三态打磨 | P1 | todo | M6-02 |
+| M6-06 | 空态 / 错误展示 | P1 | done | empty + error banner |
 | M6-07 | 键盘快捷键与基础 a11y | P2 | todo | M6-01 |
 
 **退出**：不看日志也能完成「捕获 → 阅读 → 问 AI」。
@@ -232,6 +232,7 @@ Hub / Daemon        Go
 | 2026-08-10 | M2-05 去重 + generic-web + cmd/capture 客户端 |
 | 2026-08-10 | M4 AI：Recipe + OpenAI 兼容 Dispatcher + Response 存储 |
 | 2026-08-10 | M5-03 Chrome Extension：当前页捕获 + 可选 AI |
+| 2026-08-10 | M6 Local Hub Web UI + GET /jobs|/docs 列表 + CORS |
 
 ---
 

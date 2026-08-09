@@ -79,3 +79,20 @@ type CreateJobRequest struct {
 	URL  string `json:"url"`
 	Task string `json:"task,omitempty"`
 }
+
+// DocumentSummary is a library row without full content body.
+type DocumentSummary struct {
+	DocumentID     string `json:"document_id"`
+	RevisionID     string `json:"revision_id"`
+	Source         string `json:"source"`
+	Type           string `json:"type"`
+	URL            string `json:"url"`
+	Title          string `json:"title"`
+	Author         string `json:"author"`
+	Collector      string `json:"collector"`
+	Adapter        string `json:"adapter"`
+	ContentHash    string `json:"content_hash"`
+	SchemaVersion  string `json:"schema_version"`
+	CapturedAt     string `json:"captured_at"`
+	UpdatedAt      string `json:"updated_at"`
+}

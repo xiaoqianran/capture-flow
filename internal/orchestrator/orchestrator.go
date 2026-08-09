@@ -57,6 +57,14 @@ func (o *Orchestrator) GetDocument(documentID string) (*domain.ContentPacket, er
 	return o.store.GetPacketByDocumentID(documentID)
 }
 
+func (o *Orchestrator) ListJobs(limit int) ([]domain.Job, error) {
+	return o.store.ListJobs(limit)
+}
+
+func (o *Orchestrator) ListDocuments(limit int) ([]domain.DocumentSummary, error) {
+	return o.store.ListDocuments(limit)
+}
+
 func (o *Orchestrator) process(ctx context.Context, jobID string) {
 	job, err := o.store.GetJob(jobID)
 	if err != nil {

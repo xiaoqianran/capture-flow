@@ -15,6 +15,7 @@
 | AI | OpenAI 兼容 `/chat/completions`；内置 summarize/outline/qa-prep |
 | 客户端 | `go run ./cmd/capture <url>` / `capture ai <doc>` |
 | Chrome 扩展 | `extension/` 当前页一键入队（可选 AI） |
+| Local Hub UI | `web/` Library / Jobs / Capture（Vite） |
 
 ```text
 Registry: zhihu → generic-web → fake
@@ -70,6 +71,19 @@ go run ./cmd/hub -addr 127.0.0.1:8080 -data data
 
 详见 [extension/README.md](./extension/README.md)。快捷键默认 `Ctrl+Shift+Y`。
 
+## Local Hub Web UI
+
+```bash
+# 终端 1
+go run ./cmd/hub -addr 127.0.0.1:8080 -data data
+
+# 终端 2
+cd web && bun install && bun run dev
+# → http://127.0.0.1:5173  （/api 代理到 :8080）
+```
+
+详见 [web/README.md](./web/README.md)。新增列表 API：`GET /jobs`、`GET /docs`。
+
 ## 文档
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — v1 架构基线
@@ -82,6 +96,7 @@ go run ./cmd/hub -addr 127.0.0.1:8080 -data data
 cmd/hub/           守护进程
 cmd/capture/       本地 CLI 客户端
 extension/         Chrome MV3 扩展（当前页捕获）
+web/               Local Hub UI（React + Vite）
 internal/
   adapter/         zhihu · generic-web · fake
   runner/          cli (opencli) · fake

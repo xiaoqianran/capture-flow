@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,13 +26,15 @@ func New(orch *orchestrator.Orchestrator, aiSvc *ai.Service) *Server {
 }
 
 func (s *Server) Handler() http.Handler {
-	return s.mux
+	return withCORS(s.mux)
 }
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("POST /jobs", s.handleCreateJob)
+	s.mux.HandleFunc("GET /jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /jobs/{id}", s.handleGetJob)
+	s.mux.HandleFunc("GET /docs", s.handleListDocs)
 	s.mux.HandleFunc("GET /docs/{id}", s.handleGetDoc)
 
 	s.mux.HandleFunc("GET /recipes", s.handleListRecipes)
@@ -40,11 +43,39 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /docs/{id}/ai", s.handleListDocAI)
 }
 
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" || isLocalOrigin(origin) {
+			if origin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Vary", "Origin")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isLocalOrigin(origin string) bool {
+	return strings.HasPrefix(origin, "http://127.0.0.1:") ||
+		strings.HasPrefix(origin, "http://localhost:") ||
+		origin == "http://127.0.0.1" ||
+		origin == "http://localhost"
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	aiOK := s.ai != nil && s.ai.Configured()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":       "ok",
-		"time":         time.Now().UTC().Format(time.RFC3339),
+		"status":        "ok",
+		"time":          time.Now().UTC().Format(time.RFC3339),
 		"ai_configured": aiOK,
 	})
 }
@@ -69,6 +100,19 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, job)
 }
 
+func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	list, err := s.orch.ListJobs(limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, domain.ErrInternal, err.Error())
+		return
+	}
+	if list == nil {
+		list = []domain.Job{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	job, err := s.orch.GetJob(id)
@@ -77,6 +121,19 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, job)
+}
+
+func (s *Server) handleListDocs(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	list, err := s.orch.ListDocuments(limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, domain.ErrInternal, err.Error())
+		return
+	}
+	if list == nil {
+		list = []domain.DocumentSummary{}
+	}
+	writeJSON(w, http.StatusOK, list)
 }
 
 func (s *Server) handleGetDoc(w http.ResponseWriter, r *http.Request) {

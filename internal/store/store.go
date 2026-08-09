@@ -153,6 +153,82 @@ SELECT id, status, url, task, adapter, collector, document_id, revision_id,
        error_code, error_message, recoverable, trace_json, created_at, updated_at
 FROM jobs WHERE id = ?`, id)
 
+	job, err := scanJob(row)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("job not found: %s", id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return job, nil
+}
+
+// ListJobs returns newest jobs first.
+func (s *Store) ListJobs(limit int) ([]domain.Job, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.db.Query(`
+SELECT id, status, url, task, adapter, collector, document_id, revision_id,
+       error_code, error_message, recoverable, trace_json, created_at, updated_at
+FROM jobs
+ORDER BY created_at DESC
+LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.Job
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *job)
+	}
+	return out, rows.Err()
+}
+
+// ListDocuments returns library summaries newest first.
+func (s *Store) ListDocuments(limit int) ([]domain.DocumentSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.db.Query(`
+SELECT document_id, revision_id, source, type, url, title, author,
+       collector, adapter, content_hash, schema_version, captured_at, updated_at
+FROM documents
+ORDER BY updated_at DESC
+LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.DocumentSummary
+	for rows.Next() {
+		var d domain.DocumentSummary
+		if err := rows.Scan(
+			&d.DocumentID, &d.RevisionID, &d.Source, &d.Type, &d.URL, &d.Title, &d.Author,
+			&d.Collector, &d.Adapter, &d.ContentHash, &d.SchemaVersion, &d.CapturedAt, &d.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+type scannable interface {
+	Scan(dest ...any) error
+}
+
+func scanJob(row scannable) (*domain.Job, error) {
 	var (
 		job          domain.Job
 		status       string
@@ -166,9 +242,6 @@ FROM jobs WHERE id = ?`, id)
 		&job.Adapter, &job.Collector, &job.DocumentID, &job.RevisionID,
 		&errCode, &job.ErrorMessage, &recoverable, &traceJSON, &created, &upd,
 	)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("job not found: %s", id)
-	}
 	if err != nil {
 		return nil, err
 	}
