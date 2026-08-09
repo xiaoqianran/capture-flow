@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/xiaoqianran/capture-flow/schemas/content-packet.schema.json",
+  "title": "ContentPacket",
+  "description": "Canonical snapshot after normalize. schema_version must bump on breaking field changes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_id",
+    "revision_id",
+    "source",
+    "type",
+    "url",
+    "title",
+    "author",
+    "content_md",
+    "content_raw",
+    "collector",
+    "adapter",
+    "adapter_version",
+    "captured_at",
+    "content_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "ContentPacket protocol version"
+    },
+    "document_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Site semantic id, e.g. zhihu, generic-web"
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Document type, e.g. answer, article, page"
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "content_md": {
+      "type": "string"
+    },
+    "content_raw": {
+      "type": "string"
+    },
+    "collector": {
+      "type": "string",
+      "const": "opencli",
+      "description": "v1 only opencli"
+    },
+    "adapter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adapter_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/xiaoqianran/capture-flow/schemas/job.schema.json",
+  "title": "CollectJob",
+  "description": "Orchestrator job record for capture pipeline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "status",
+    "target",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "planning",
+        "running",
+        "normalizing",
+        "stored",
+        "done",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "task": {
+          "type": "string",
+          "default": "full_text",
+          "description": "e.g. full_text, subtitle, selection"
+        }
+      }
+    },
+    "adapter": { "type": "string" },
+    "collector": { "type": "string" },
+    "document_id": { "type": "string" },
+    "revision_id": { "type": "string" },
+    "error_code": {
+      "type": "string",
+      "description": "See error-codes.md; empty when ok"
+    },
+    "error_message": { "type": "string" },
+    "recoverable": { "type": "boolean" },
+    "trace": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

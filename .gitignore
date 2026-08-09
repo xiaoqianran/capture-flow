@@ -1,0 +1,31 @@
+# Runtime data
+/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Binaries
+/bin/
+/cmd/hub/hub
+/cmd/hub/hub.exe
+/hub
+/hub.exe
+/capture
+/capture.exe
+
+# Go
+/vendor/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Node / Bun (later)
+node_modules/
+.web/
+dist/
+*.log
