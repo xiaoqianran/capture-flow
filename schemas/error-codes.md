@@ -27,6 +27,9 @@ Cross-language enums. Go: `internal/domain/errors.go`.
 | `runner_timeout` | yes | Runner exceeded timeout |
 | `normalize_failed` | no | Raw cannot map to ContentPacket |
 | `store_failed` | yes | SQLite/filesystem write failed |
+| `not_found` | no | Job/document/recipe/response missing |
+| `ai_failed` | yes | Provider/API error |
+| `ai_not_configured` | no | Missing API key and not in fake-ai mode |
 | `internal` | no | Unexpected hub error |
 
 **Retry policy (v1)**: only when `recoverable=true`. M1 fake path does not auto-retry.

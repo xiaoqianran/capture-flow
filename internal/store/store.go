@@ -28,6 +28,10 @@ func Open(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(packetDir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir packets: %w", err)
 	}
+	aiDir := filepath.Join(dataDir, "ai_responses")
+	if err := os.MkdirAll(aiDir, 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir ai_responses: %w", err)
+	}
 
 	dbPath := filepath.Join(dataDir, "hub.db")
 	db, err := sql.Open("sqlite", dbPath)
@@ -83,6 +87,22 @@ CREATE TABLE IF NOT EXISTS documents (
   packet_path TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ai_responses (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  revision_id TEXT NOT NULL,
+  recipe_id TEXT NOT NULL,
+  model TEXT NOT NULL,
+  provider TEXT NOT NULL DEFAULT '',
+  prompt_system TEXT NOT NULL DEFAULT '',
+  prompt_user TEXT NOT NULL DEFAULT '',
+  content_md TEXT NOT NULL,
+  raw_path TEXT NOT NULL DEFAULT '',
+  md_path TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_responses_document ON ai_responses(document_id, created_at);
 `)
 	return err
 }
@@ -266,6 +286,102 @@ func (s *Store) SavePacketIfChanged(packet domain.ContentPacket) (revisionID str
 		return "", false, err
 	}
 	return packet.RevisionID, false, nil
+}
+
+func (s *Store) SaveAIResponse(resp *domain.AIResponse) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	mdPath := filepath.Join(s.dataDir, "ai_responses", resp.ID+".md")
+	rawPath := filepath.Join(s.dataDir, "ai_responses", resp.ID+".raw.json")
+	header := fmt.Sprintf("---\nid: %s\ndocument_id: %s\nrevision_id: %s\nrecipe_id: %s\nmodel: %s\ncreated_at: %s\n---\n\n",
+		resp.ID, resp.DocumentID, resp.RevisionID, resp.RecipeID, resp.Model,
+		resp.CreatedAt.UTC().Format(time.RFC3339))
+	if err := os.WriteFile(mdPath, []byte(header+resp.ContentMD+"\n"), 0o644); err != nil {
+		return err
+	}
+	if resp.RawJSON != "" {
+		if err := os.WriteFile(rawPath, []byte(resp.RawJSON), 0o644); err != nil {
+			return err
+		}
+	} else {
+		rawPath = ""
+	}
+
+	_, err := s.db.Exec(`
+INSERT INTO ai_responses (
+  id, document_id, revision_id, recipe_id, model, provider,
+  prompt_system, prompt_user, content_md, raw_path, md_path, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`,
+		resp.ID, resp.DocumentID, resp.RevisionID, resp.RecipeID, resp.Model, resp.Provider,
+		resp.PromptSystem, resp.PromptUser, resp.ContentMD, rawPath, mdPath,
+		resp.CreatedAt.UTC().Format(time.RFC3339Nano),
+	)
+	return err
+}
+
+func (s *Store) GetAIResponse(id string) (*domain.AIResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	row := s.db.QueryRow(`
+SELECT id, document_id, revision_id, recipe_id, model, provider,
+       prompt_system, prompt_user, content_md, raw_path, created_at
+FROM ai_responses WHERE id = ?`, id)
+
+	var (
+		resp     domain.AIResponse
+		rawPath  string
+		created  string
+	)
+	err := row.Scan(
+		&resp.ID, &resp.DocumentID, &resp.RevisionID, &resp.RecipeID, &resp.Model, &resp.Provider,
+		&resp.PromptSystem, &resp.PromptUser, &resp.ContentMD, &rawPath, &created,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("ai response not found: %s", id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	resp.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+	if rawPath != "" {
+		if b, err := os.ReadFile(rawPath); err == nil {
+			resp.RawJSON = string(b)
+		}
+	}
+	return &resp, nil
+}
+
+func (s *Store) ListAIResponsesByDocument(documentID string) ([]domain.AIResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.db.Query(`
+SELECT id, document_id, revision_id, recipe_id, model, provider,
+       prompt_system, prompt_user, content_md, created_at
+FROM ai_responses WHERE document_id = ?
+ORDER BY created_at DESC`, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.AIResponse
+	for rows.Next() {
+		var resp domain.AIResponse
+		var created string
+		if err := rows.Scan(
+			&resp.ID, &resp.DocumentID, &resp.RevisionID, &resp.RecipeID, &resp.Model, &resp.Provider,
+			&resp.PromptSystem, &resp.PromptUser, &resp.ContentMD, &created,
+		); err != nil {
+			return nil, err
+		}
+		resp.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+		out = append(out, resp)
+	}
+	return out, rows.Err()
 }
 
 func boolToInt(v bool) int {

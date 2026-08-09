@@ -12,13 +12,16 @@ const (
 	ErrRunnerTimeout   ErrorCode = "runner_timeout"
 	ErrNormalizeFailed ErrorCode = "normalize_failed"
 	ErrStoreFailed     ErrorCode = "store_failed"
+	ErrNotFound        ErrorCode = "not_found"
+	ErrAIFailed        ErrorCode = "ai_failed"
+	ErrAINotConfigured ErrorCode = "ai_not_configured"
 	ErrInternal        ErrorCode = "internal"
 )
 
 // Recoverable reports whether a retry or collector switch may help.
 func (c ErrorCode) Recoverable() bool {
 	switch c {
-	case ErrPlanFailed, ErrRunnerFailed, ErrRunnerTimeout, ErrStoreFailed:
+	case ErrPlanFailed, ErrRunnerFailed, ErrRunnerTimeout, ErrStoreFailed, ErrAIFailed:
 		return true
 	default:
 		return false

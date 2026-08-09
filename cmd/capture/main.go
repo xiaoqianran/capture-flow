@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,6 +18,8 @@ func main() {
 	hub := flag.String("hub", "http://127.0.0.1:8080", "hub base URL")
 	wait := flag.Duration("wait", 3*time.Minute, "max wait for job completion")
 	poll := flag.Duration("poll", 500*time.Millisecond, "poll interval")
+	recipe := flag.String("recipe", "summarize", "recipe id for ai subcommand")
+	model := flag.String("model", "", "model override for ai subcommand")
 	flag.Parse()
 
 	args := flag.Args()
@@ -25,7 +28,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 180 * time.Second}
 	base := strings.TrimRight(*hub, "/")
 
 	switch args[0] {
@@ -45,6 +48,44 @@ func main() {
 		printJSON(doc)
 	case "health":
 		raw, err := getRaw(client, base+"/health")
+		must(err)
+		fmt.Println(string(raw))
+	case "recipes":
+		raw, err := getRaw(client, base+"/recipes")
+		must(err)
+		fmt.Println(string(raw))
+	case "ai":
+		if len(args) < 2 {
+			fail("usage: capture ai <document_id> [-recipe summarize] [-model ...]")
+		}
+		body, _ := json.Marshal(domain.RunAIRequest{
+			DocumentID: args[1],
+			RecipeID:   *recipe,
+			Model:      *model,
+		})
+		req, err := http.NewRequest(http.MethodPost, base+"/ai/run", bytes.NewReader(body))
+		must(err)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		must(err)
+		defer resp.Body.Close()
+		raw, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode >= 300 {
+			fail(fmt.Sprintf("POST /ai/run %s: %s", resp.Status, string(raw)))
+		}
+		fmt.Println(string(raw))
+	case "ai-list":
+		if len(args) < 2 {
+			fail("usage: capture ai-list <document_id>")
+		}
+		raw, err := getRaw(client, base+"/docs/"+args[1]+"/ai")
+		must(err)
+		fmt.Println(string(raw))
+	case "ai-show":
+		if len(args) < 2 {
+			fail("usage: capture ai-show <response_id>")
+		}
+		raw, err := getRaw(client, base+"/ai/responses/"+args[1])
 		must(err)
 		fmt.Println(string(raw))
 	default:
@@ -78,15 +119,21 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `capture-flow client
 
 Usage:
-  capture [flags] <url> [task]   Submit capture job and wait
-  capture [flags] job <id>       Show job JSON
-  capture [flags] doc <id>       Show ContentPacket JSON
-  capture [flags] health         Hub health
+  capture [flags] <url> [task]              Submit capture job and wait
+  capture [flags] job <id>                  Show job JSON
+  capture [flags] doc <id>                  Show ContentPacket JSON
+  capture [flags] health                    Hub health
+  capture [flags] recipes                   List AI recipes
+  capture [flags] ai <document_id>          Run AI recipe (default summarize)
+  capture [flags] ai-list <document_id>     List AI responses for document
+  capture [flags] ai-show <response_id>     Show one AI response
 
 Flags:
-  -hub string     Hub base URL (default http://127.0.0.1:8080)
-  -wait duration  Max wait (default 3m)
-  -poll duration  Poll interval (default 500ms)
+  -hub string       Hub base URL (default http://127.0.0.1:8080)
+  -wait duration    Max wait for capture job (default 3m)
+  -poll duration    Poll interval (default 500ms)
+  -recipe string    Recipe id for ai (default summarize)
+  -model string     Model override for ai
 `)
 }
 
