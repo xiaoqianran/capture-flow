@@ -130,21 +130,30 @@ func (o *Orchestrator) process(ctx context.Context, jobID string) {
 		return
 	}
 
-	// stored
-	if err := o.store.SavePacket(packet); err != nil {
+	// stored (or dedup if same content_hash)
+	revID, deduped, err := o.store.SavePacketIfChanged(packet)
+	if err != nil {
 		fail(domain.ErrStoreFailed, err.Error())
 		return
 	}
-	job.Status = domain.JobStored
 	job.DocumentID = packet.DocumentID
-	job.RevisionID = packet.RevisionID
-	job.Trace = append(job.Trace, "stored:"+packet.DocumentID)
-	job.UpdatedAt = time.Now().UTC()
-	_ = o.store.SaveJob(job)
+	job.RevisionID = revID
+	if deduped {
+		job.Trace = append(job.Trace, "dedup:same_hash:"+revID)
+	} else {
+		job.Status = domain.JobStored
+		job.Trace = append(job.Trace, "stored:"+packet.DocumentID)
+		job.UpdatedAt = time.Now().UTC()
+		_ = o.store.SaveJob(job)
+	}
 
 	job.Status = domain.JobDone
 	job.ErrorCode = domain.ErrOK
-	job.Trace = append(job.Trace, "done")
+	if deduped {
+		job.Trace = append(job.Trace, "done:deduped")
+	} else {
+		job.Trace = append(job.Trace, "done")
+	}
 	job.UpdatedAt = time.Now().UTC()
 	_ = o.store.SaveJob(job)
 }

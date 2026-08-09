@@ -164,7 +164,10 @@ FROM jobs WHERE id = ?`, id)
 func (s *Store) SavePacket(packet domain.ContentPacket) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.savePacketLocked(packet)
+}
 
+func (s *Store) savePacketLocked(packet domain.ContentPacket) error {
 	path := filepath.Join(s.dataDir, "packets", packet.RevisionID+".json")
 	raw, err := json.MarshalIndent(packet, "", "  ")
 	if err != nil {
@@ -223,6 +226,46 @@ func (s *Store) GetPacketByDocumentID(documentID string) (*domain.ContentPacket,
 		return nil, err
 	}
 	return &packet, nil
+}
+
+// LatestMeta returns content_hash and revision_id for a document, if any.
+func (s *Store) LatestMeta(documentID string) (contentHash, revisionID string, ok bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.latestMetaLocked(documentID)
+}
+
+func (s *Store) latestMetaLocked(documentID string) (contentHash, revisionID string, ok bool, err error) {
+	err = s.db.QueryRow(
+		`SELECT content_hash, revision_id FROM documents WHERE document_id = ?`,
+		documentID,
+	).Scan(&contentHash, &revisionID)
+	if err == sql.ErrNoRows {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return contentHash, revisionID, true, nil
+}
+
+// SavePacketIfChanged writes a new revision only when content_hash differs.
+// If hash is unchanged, returns the existing revision_id and deduped=true.
+func (s *Store) SavePacketIfChanged(packet domain.ContentPacket) (revisionID string, deduped bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	hash, rev, ok, err := s.latestMetaLocked(packet.DocumentID)
+	if err != nil {
+		return "", false, err
+	}
+	if ok && hash == packet.ContentHash && hash != "" {
+		return rev, true, nil
+	}
+	if err := s.savePacketLocked(packet); err != nil {
+		return "", false, err
+	}
+	return packet.RevisionID, false, nil
 }
 
 func boolToInt(v bool) int {
