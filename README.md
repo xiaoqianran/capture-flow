@@ -4,36 +4,47 @@
 
 > v1 约束：Hub = **Go**；UI/扩展 = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 **知乎 → 通用网页 → B站/YouTube**。
 
-## M1 现状
+## 现状
 
-已打通假数据链路：
+- **M1**：假数据链路（`fake://…` + FakeRunner）  
+- **M2**：真实知乎回答 → **OpenCLI** → ContentPacket → SQLite  
 
 ```text
-POST /jobs → FakeAdapter → FakeRunner → ContentPacket → SQLite
+POST /jobs
+  → ZhihuAdapter
+  → CLI Runner (opencli zhihu answer-detail … -f json)
+  → ContentPacket
+  → SQLite
 ```
+
+依赖：Go 1.22+、本机已安装并可用的 `opencli`（知乎命令需 browser bridge，见 `opencli doctor`）。
 
 ## 快速运行
 
 ```bash
-# 依赖：Go 1.22+
 go test ./...
 go run ./cmd/hub -addr 127.0.0.1:8080 -data data
+# 仅测假数据：go run ./cmd/hub -fake-runner -addr 127.0.0.1:8080
 ```
 
 另开终端：
 
 ```bash
+# 真实知乎回答 URL（需 opencli + 登录态/bridge）
 curl -s -X POST http://127.0.0.1:8080/jobs \
   -H "Content-Type: application/json" \
-  -d "{\"url\":\"https://www.zhihu.com/question/1/answer/1\",\"task\":\"full_text\"}"
+  -d "{\"url\":\"https://www.zhihu.com/question/<qid>/answer/<aid>\",\"task\":\"full_text\"}"
 
-# 用返回的 job id 轮询
 curl -s http://127.0.0.1:8080/jobs/<job_id>
-
-# 完成后用 document_id 取包
 curl -s http://127.0.0.1:8080/docs/<document_id>
+
+# 假数据（不依赖 opencli）
+curl -s -X POST http://127.0.0.1:8080/jobs \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"fake://demo\"}"
 ```
 
+**说明**：仅问题页 URL（无 `/answer/<id>`）会被拒绝；请传回答链接。专栏文章走 `opencli zhihu download`（元数据优先，正文能力弱于回答）。
 ## 文档
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — v1 架构基线
@@ -45,8 +56,8 @@ curl -s http://127.0.0.1:8080/docs/<document_id>
 ```text
 cmd/hub/           守护进程入口
 internal/
-  adapter/         站点语义（含 fake）
-  runner/          执行（含 fake-opencli）
+  adapter/         zhihu · fake
+  runner/          cli (opencli) · fake
   orchestrator/    Job 状态机
   store/           SQLite + packet 文件
   api/             REST

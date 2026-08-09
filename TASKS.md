@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**M1 假数据通路已跑通 → 准备 M2 知乎 + OpenCLI**。
+当前焦点：**M2 知乎 + OpenCLI 已跑通 → 可扩通用网页 / AI / UI**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -63,16 +63,16 @@
 
 | ID | 任务 | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| M2-01 | CLI Runner（timeout / kill / 捕获 IO，调 OpenCLI） | P0 | todo | M1 |
-| M2-02 | 知乎 Adapter（plan + normalize） | P0 | todo | M2-01 |
-| M2-03 | 接入 OpenCLI（唯一真实 collector） | P0 | todo | M2-01 |
-| M2-04 | document_id / content_hash 规则 | P0 | todo | M0-06 |
+| M2-01 | CLI Runner（timeout / kill / 捕获 IO，调 OpenCLI） | P0 | done | `internal/runner/cli` |
+| M2-02 | 知乎 Adapter（plan + normalize） | P0 | done | answer-detail；article download 初版 |
+| M2-03 | 接入 OpenCLI（唯一真实 collector） | P0 | done | Hub 默认 CLI Runner |
+| M2-04 | document_id / content_hash 规则 | P0 | done | `domain.DocumentID` / `ContentHash` |
 | M2-05 | Dedup：同 hash 跳过写 revision | P1 | todo | M2-04 |
 | M2-06 | Raw 归档策略（保留/轮转） | P1 | todo | M1-05 |
-| M2-07 | 端到端：真实 URL → Library 可打开 | P0 | todo | M2-02..04 |
+| M2-07 | 端到端：真实 URL → Library 可打开 | P0 | done | 真实知乎回答 → Packet 入库 |
 
-**退出**：对 3 个真实样例 URL 稳定成功 ≥ 2/3。
-
+**退出**：对 3 个真实样例 URL 稳定成功 ≥ 2/3。  
+**退出证据（2026-08-10）**：`POST` 知乎回答 URL → `adapter=zhihu` `collector=opencli` `status=done`；`GET /docs/{id}` 含 `schema_version=1.0.0` 与正文。
 ---
 
 ## M3 — 策略链与可靠性
@@ -228,6 +228,7 @@ Hub / Daemon        Go
 | 2026-08-10 | 锁定 Go Hub + Bun/TS 客户端；M0-03 done；M1 按 Go monorepo 细化 |
 | 2026-08-10 | v1 基线：OpenCLI-only、知乎优先、M1 无 WS、schema_version；开工 M1 |
 | 2026-08-10 | M0-06/07 + M1 假数据 REST 通路跑通（FakeAdapter/Runner → SQLite） |
+| 2026-08-10 | M2：CLI OpenCLI Runner + ZhihuAdapter；真实回答端到端 done |
 
 ---
 
