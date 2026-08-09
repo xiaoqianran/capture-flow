@@ -20,7 +20,7 @@
 
 当前焦点：**M0 收尾 → M1 Go Hub 骨架**。
 
-**技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = 外部 CLI。详见 `ARCHITECTURE.md` §9。
+**技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
 ---
 
@@ -49,22 +49,22 @@
 | M1-05 | Store：SQLite 元数据 + Packet/文件落盘 | P0 | todo | M1-02 |
 | M1-06 | 集成测试：假 URL → ContentPacket（`go test`） | P0 | todo | M1-04, M1-05 |
 | M1-07 | 结构化日志 / Job trace 字段 | P1 | todo | M1-03 |
-| M1-08 | 最小 REST：`POST /jobs`、`GET /jobs/:id`、`GET /docs/:id` | P0 | todo | M1-03, M1-05 |
-| M1-09 | WebSocket：Job 状态推送（可先 stub） | P1 | todo | M1-08 |
+| M1-08 | 最小 REST：`POST /jobs`、`GET /jobs/:id`、`GET /docs/:id`（轮询即可） | P0 | todo | M1-03, M1-05 |
+| M1-09 | WebSocket：Job 状态推送 | P2 | todo | 非 M1；REST 轮询足够 |
 
-**退出**：`go run ./cmd/hub` 启动后，用 CLI 或 curl 提交 fixture Job，拿到完整 Packet（JSON）。
-
+**M1 真正目标**：`Job → Adapter → Runner → Packet → SQLite`（假数据贯通）。  
+**退出**：`curl POST /jobs` → FakeAdapter → FakeRunner → ContentPacket → SQLite，可 `GET` 查回。
 ---
 
-## M2 — 真实采集 MVP（建议首站可协商）
+## M2 — 真实采集 MVP（首站：知乎）
 
-默认建议首站：**通用网页全文** 或 **知乎回答**（二选一，见选型）。
+站点顺序：**知乎 → 通用网页 → B站/YouTube**。Collector：**仅 OpenCLI**。
 
 | ID | 任务 | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| M2-01 | CLI Runner（timeout / kill / 捕获 IO） | P0 | todo | M1 |
-| M2-02 | 首个真实 Adapter（plan + normalize） | P0 | todo | M2-01 |
-| M2-03 | 接入 1 个真实 Collector（OpenCLI 或专用 CLI） | P0 | todo | M2-01 |
+| M2-01 | CLI Runner（timeout / kill / 捕获 IO，调 OpenCLI） | P0 | todo | M1 |
+| M2-02 | 知乎 Adapter（plan + normalize） | P0 | todo | M2-01 |
+| M2-03 | 接入 OpenCLI（唯一真实 collector） | P0 | todo | M2-01 |
 | M2-04 | document_id / content_hash 规则 | P0 | todo | M0-06 |
 | M2-05 | Dedup：同 hash 跳过写 revision | P1 | todo | M2-04 |
 | M2-06 | Raw 归档策略（保留/轮转） | P1 | todo | M1-05 |
@@ -82,8 +82,9 @@
 | M3-02 | CapturePlan 多候选 + 评分 | P0 | todo | M3-01 |
 | M3-03 | 失败换下一候选（非盲目重试） | P0 | todo | M3-02 |
 | M3-04 | Collector 健康分 / 简单熔断 | P1 | todo | M3-03 |
-| M3-05 | Browser Runner 最小实现（扩展或 Playwright 二选一） | P1 | todo | M2 |
-| M3-06 | 第二平台 Adapter（如 B站字幕或 YouTube） | P1 | todo | M3-02 |
+| M3-05 | （不设 Browser Runner）v1 不接 DOM/Playwright 插件 | — | cancelled | 仅 OpenCLI |
+| M3-06 | 第二平台：通用网页 Adapter | P1 | todo | M2 |
+| M3-06b | 第三平台：B站 / YouTube Adapter | P2 | todo | M3-06 |
 | M3-07 | 平台×任务 strategy 配置表 | P0 | todo | M3-01 |
 
 **退出**：人为搞挂首选 collector 后仍能降级成功，且 Job trace 可审计。
@@ -153,19 +154,16 @@
 ## 建议实施顺序（最短闭环）
 
 ```
-M0 文档与栈（栈已锁定）
- → M1 Go Hub 假数据贯通 + 最小 REST
- → M2 一个真实 Adapter + Go CLI Runner + 外部 collector
- → M5-01/02 Go CLI + HTTP 可触发
- → M3 降级策略
- → M4 最小 AI（Go Dispatcher）
- → M5-03 Bun 构建 Chrome Extension
- → M6 React Local Hub UI 打磨
- → （远期）Wails 桌面封装
+M0-06 ContentPacket Schema
+ → M0-07 Job / Error Enum
+ → M1-01 Go monorepo
+ → FakeAdapter + FakeRunner
+ → SQLite
+ → POST /jobs
+ → （跑通后）M2 真实知乎 + OpenCLI
 ```
 
-原则：**Go 先稳住系统内核；TS 后接界面与浏览器；先协议与编排，后平台广度。**
-
+原则：**先假数据贯通内核；再接知乎+OpenCLI；不扩第二 collector；M1 不上 WebSocket。**
 ---
 
 ## 技术栈决策记录（M0-03 关闭）
@@ -183,7 +181,7 @@ Hub / Daemon        Go
 ├─ packages/protocol（类型 / Schema）
 └─ 测试 / 构建
 
-外部 Collector      yt-dlp / OpenCLI / loop-bilibili / …
+外部 Collector      **仅 OpenCLI**
 远期桌面            Wails + Go + React
 ```
 
@@ -195,7 +193,9 @@ Hub / Daemon        Go
 | Hub | **Go** | 全 Bun/TS Hub、Python Daemon |
 | UI/扩展 | **Bun + TS（React + Vite）** | 无 UI、Tauri 优先 |
 | 存储 | SQLite + 外置大对象 | 纯文件 |
-| 首站 | 通用网页 → 知乎 | 字幕向优先 |
+| Collector | **仅 OpenCLI** | 多 CLI/插件生态 |
+| 站点顺序 | **知乎 → 通用网页 → B站/YouTube** | 通用网页优先 |
+| 通信 M1 | **REST + 轮询** | M1 WebSocket（已降为 P2） |
 | AI MVP | OpenAI 兼容多 baseURL | 网页注入双路径（后置） |
 | 包管理 | Go modules + Bun | pnpm/Node 亦可，默认 Bun |
 
@@ -209,9 +209,13 @@ Hub / Daemon        Go
 | Rust + TS | ★★★ | MVP 复杂度不值 |
 | Python + TS | ★★★ | 仅强依赖 Python 内嵌时 |
 
-### 仍可微调（不阻塞 M1）
+### v1 基线补充（评审 9/10）
 
-- 首站切片粒度、默认 AI provider、Schema→Go 生成与否、Browser Runner 通道形态  
+- M1-09 WebSocket → **P2**，M1 只保证 REST 贯通  
+- 首站改为 **知乎优先**  
+- ContentPacket **必须** `schema_version`  
+- Collector **只做 OpenCLI**，不花式对接插件  
+- **停止继续架构讨论，进入实现**
 
 ---
 
@@ -221,6 +225,7 @@ Hub / Daemon        Go
 |------|------|
 | 2026-08-10 | 初版：由 v001 / ARCHITECTURE 拆分里程碑与选型待议 |
 | 2026-08-10 | 锁定 Go Hub + Bun/TS 客户端；M0-03 done；M1 按 Go monorepo 细化 |
+| 2026-08-10 | v1 基线：OpenCLI-only、知乎优先、M1 无 WS、schema_version；开工 M1 |
 
 ---
 

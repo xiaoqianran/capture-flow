@@ -99,36 +99,30 @@ RawResult
 ZhihuAdapter.normalize(raw) → ContentPacket
 ```
 
-**收益**：同一个知乎 Adapter 可挂 OpenCLI、zhihu-cli、Chrome DOM 三套 Runner，无需三个 Adapter。
+**收益**：同一 Adapter 可挂不同 Collector/Runner，无需复制站点语义。  
+**当前产品约束（v1）**：采集技术只接 **OpenCLI**，不做插件市场、不做多 Collector 花式对接。架构保留 `collector` 字段与扩展点，实现上默认且唯一走 OpenCLI。
 
 ### 3.2 collector ≠ adapter
 
 | 概念 | 绑定对象 | 示例 |
 |------|----------|------|
-| **adapter** | 站点语义 / 文档类型 | `zhihu`、`bilibili`、`youtube` |
-| **collector** | 采集技术实现 | `opencli`、`yt-dlp`、`loop-bilibili`、`chrome-dom` |
+| **adapter** | 站点语义 / 文档类型 | `zhihu`、`generic-web`、`bilibili`、`youtube` |
+| **collector** | 采集技术实现 | v1 仅 **`opencli`** |
 
-更换采集技术只换 `collector`，**Document 语义与 `adapter` 不变**。这是 Adapter 存在的根本价值。
+更换采集技术只换 `collector`，**Document 语义与 `adapter` 不变**。这是 Adapter 存在的根本价值。v1 不扩展其他 collector，避免过早抽象。
 
 ### 3.3 策略链按「平台 × 任务」配置，不写死全局优先级
 
-全局默认仅作兜底：
+v1 实际路径：
 
 ```
-官方 API / 成熟专用工具
-  > 自研专用 Collector
-  > OpenCLI
-  > Chrome Extension DOM
-  > Playwright
+平台 Adapter → CapturePlan(collector=opencli) → CLI Runner → normalize
 ```
 
-**真实选择**由 Registry 产出带分候选：
+预留「平台 × 任务」评分位，便于以后加候选；**当前候选列表长度恒为 1（opencli）**。站点落地顺序：
 
 ```
-B站字幕：[loop-bilibili (100), yt-dlp (80), browser (50)]
-YouTube 字幕：[yt-dlp (100), browser (40)]
-知乎文章：[zhihu-cli/OpenCLI (90), Chrome DOM (50)]
-选中文本：[browser (100)]
+知乎 → 通用网页 → B站 / YouTube
 ```
 
 **Hub 选型依据**（加权）：
@@ -161,6 +155,7 @@ YouTube 字幕：[yt-dlp (100), browser (40)]
 
 ```json
 {
+  "schema_version": "1.0.0",
   "document_id": "doc_...",
   "revision_id": "rev_...",
   "source": "zhihu",
@@ -172,7 +167,7 @@ YouTube 字幕：[yt-dlp (100), browser (40)]
   "content_raw": "...",
   "collector": "opencli",
   "adapter": "zhihu",
-  "adapter_version": "1.2.0",
+  "adapter_version": "1.0.0",
   "captured_at": "2026-08-10T12:00:00Z",
   "content_hash": "sha256:..."
 }
@@ -180,10 +175,11 @@ YouTube 字幕：[yt-dlp (100), browser (40)]
 
 **不变式**
 
+- `schema_version` 标识 ContentPacket 协议版本，升级必递增（见 `schemas/`）  
 - `document_id` 稳定（通常由规范化 URL + type 派生）  
 - `revision_id` 每次成功采集递增  
 - `content_hash` 用于去重与「内容是否变化」  
-- `adapter` 语义权威；`collector` 仅审计/调试  
+- `adapter` 语义权威；`collector` 仅审计/调试（v1 固定 `opencli`）  
 
 ### 4.3 CapturePlan（示意）
 
@@ -267,17 +263,15 @@ Recipe ──► Prompt Builder ──► Multi-AI Dispatcher
 
 ---
 
-## 6. 采集优先级与 Collector 矩阵
+## 6. 站点落地顺序与 Collector（v1）
 
-| 平台/任务 | 首选 | 次选 | 兜底 |
-|-----------|------|------|------|
-| YouTube 字幕 | yt-dlp | — | Browser |
-| B站字幕 | loop-bilibili | yt-dlp | Browser |
-| 知乎文章/回答 | zhihu-cli / OpenCLI | — | Chrome DOM |
-| 通用页面 | OpenCLI | — | Chrome / Playwright |
-| 用户选中文本 | Browser | — | — |
+| 顺序 | 平台 | Adapter | Collector（v1） |
+|------|------|---------|-----------------|
+| 1 | 知乎文章/回答 | `zhihu` | `opencli` |
+| 2 | 通用网页 | `generic-web` | `opencli` |
+| 3 | B站 / YouTube | `bilibili` / `youtube` | `opencli` |
 
-**扩展新站点**：实现 Adapter + 声明 strategy chain + 复用已有 Runner。
+**扩展新站点**：实现 Adapter + `plan` 指向 OpenCLI 参数 + `normalize`。不引入第二套 collector，直到 OpenCLI 明确不够用。
 
 ---
 
@@ -290,7 +284,7 @@ Recipe ──► Prompt Builder ──► Multi-AI Dispatcher
 | 安全 | 本地密钥隔离；不默认上传内容；Browser 权限最小化 |
 | 性能 | 采集路径 p95 以秒级为目标；AI 路径支持流式与取消 |
 | 可测试 | Adapter/normalize 纯函数可单测；Runner 用 fixture 回放 |
-| 可演进 | 插件式 Adapter/Collector；ContentPacket schema 版本化 |
+| 可演进 | 可插拔 Adapter（非插件市场）；ContentPacket `schema_version` 版本化 |
 
 ---
 
@@ -331,13 +325,13 @@ Capture Flow
 | Hub 主语言 | **Go** | 并发任务、子进程、超时取消、调度、常驻服务 |
 | 前端生态 | **Bun + TypeScript** | Web UI、Chrome Extension、共享类型、测试与构建 |
 | 存储 | **SQLite + 大对象外置文件** | 索引/Job/去重在 SQLite；raw / md 落 `data/` |
-| 通信 | **REST + WebSocket** | 命令与查询走 REST；Job 进度 / AI 流式走 WS |
-| 外部 Collector | **进程外包** | yt-dlp、OpenCLI、loop-bilibili 及其他 CLI/Python |
+| 通信 | **REST 优先**；WebSocket 后置 | M1 用 REST + 轮询；WS 仅以后流式/推送需要时再加 |
+| 外部 Collector | **仅 OpenCLI** | 子进程调用；不做多工具插件对接 |
 | AI（MVP） | **OpenAI 兼容多 baseURL** | Dispatcher 适配层；网页注入后置 |
-| 首站 MVP | **通用网页 → 知乎** | 先打通链路，再验证 adapter/collector 解耦 |
+| 站点顺序 | **知乎 → 通用网页 → B站/YouTube** | 知乎验证完整语义链路，避免过早做成 Web Clipper |
 | 桌面封装（远期） | **Wails + Go + React** | 与 Go Hub 同栈，避免 Electron 过重 |
 
-**明确不选（MVP）**：全量 Bun 做 Hub、Rust 重写核心、Python 做 Daemon、Electron 一体应用。
+**明确不选（v1）**：全量 Bun 做 Hub、Rust 重写核心、Python 做 Daemon、Electron、多 Collector 插件生态、M1 上 WebSocket。
 
 ### 9.2 职责切分
 
@@ -358,21 +352,18 @@ Hub / Daemon        Go
 └─ 测试 / 构建 / lint
 
 外部 Collector      独立进程
-├─ yt-dlp
-├─ OpenCLI
-├─ loop-bilibili
-└─ 其他 CLI / Python
+└─ OpenCLI（v1 唯一）
 ```
 
 | 组件 | 技术 | 边界 |
 |------|------|------|
 | Daemon | Go | 编排、队列、Registry、Runner、Store、API |
 | `capture` CLI | Go（同一模块或 `cmd/capture`） | 调本机 API 或直连 orchestrator |
-| Web UI | React + Vite + Bun | 只消费 REST/WS，不嵌采集逻辑 |
-| Extension | TS + Bun 构建 | 触发捕获、选中文本；DOM 兜底采集经协议上报 |
+| Web UI | React + Vite + Bun | 只消费 REST；不嵌采集逻辑 |
+| Extension | TS + Bun 构建 | 触发捕获；经本机 API 入队 |
 | Protocol | JSON Schema + TS 类型（可由 schema 生成） | ContentPacket / Job / Plan 跨语言契约 |
 | Go 侧契约 | 手写 struct + 校验，或 schema 生成 | 与 protocol 包版本对齐 |
-| Collectors | 外部二进制 | Hub 只传参、管生命周期、收 RawResult |
+| Collector | **OpenCLI** | Hub 只传参、管生命周期、收 RawResult |
 
 ### 9.3 仓库物理布局（目标 monorepo）
 
@@ -388,7 +379,7 @@ capture-flow/
 │   ├── runner/              # CLI / browser bridge
 │   ├── store/
 │   ├── ai/
-│   └── api/                 # REST + WebSocket
+│   └── api/                 # REST（WS 后置）
 ├── pkg/                     # 可选：对外 Go 库
 ├── web/                     # React + Vite（Bun）
 ├── extension/               # Chrome Extension（Bun）
@@ -412,12 +403,12 @@ schemas/*.json  ──►  packages/protocol（TS）
 
 ```text
 Chrome Ext / Web UI / CLI
-        │  REST + WebSocket (localhost)
+        │  REST (localhost；M1 轮询状态)
         ▼
    Go Hub Daemon
-        │  CapturePlan
+        │  CapturePlan (collector=opencli)
         ▼
-   Runner ── subprocess ──► yt-dlp / OpenCLI / ...
+   Runner ── subprocess ──► OpenCLI
         │
         ▼
    SQLite + data/raw|md
@@ -466,18 +457,20 @@ Chrome Ext / Web UI / CLI
 | Hub 语言 | **Go**（非 Bun Hub） |
 | UI / 扩展 | **Bun + TypeScript**（React + Vite） |
 | 存储 | SQLite + 外置大对象 |
-| 通信 | REST + WebSocket |
-| Collector | 外部 CLI/进程，Go Runner 托管 |
+| 通信 | REST 优先（M1 无 WS） |
+| Collector | **仅 OpenCLI** |
+| 站点顺序 | 知乎 → 通用网页 → B站/YouTube |
+| ContentPacket | 必含 `schema_version` |
 | 远期桌面 | Wails + Go + React（非 MVP） |
 
-### 实现前仍可微调（不阻塞 M1）
+### 实现细节（不阻塞 M1，实现中再定）
 
-1. **首站顺序**：通用网页（OpenCLI/DOM）与知乎的先后切片粒度  
-2. **AI 厂商列表**：MVP 默认 provider 集合与密钥存放路径  
-3. **Browser Runner**：Extension 消息通道 vs 后期 Playwright 进程  
-4. **Schema 同步方式**：手写 Go struct vs 从 JSON Schema 代码生成  
-5. **Go 模块路径 / 包管理工具版本**（go version、bun version）  
+1. AI 默认 provider 与密钥路径  
+2. Schema → Go 手写同步 vs 代码生成  
+3. go / bun 具体版本钉扎  
+
+> **v1 架构基线**：不再扩展架构讨论；进入 M1 实现。最大风险是继续设计而不落地。
 
 ---
 
-*Document status: architecture + stack locked (Go Hub · Bun/TS clients). Update when M1 layout lands in repo.*
+*Document status: v1 baseline locked (Go Hub · Bun/TS · OpenCLI only · 知乎优先). Implementation follows TASKS M1.*
