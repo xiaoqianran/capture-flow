@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capture Flow</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div>
+        <h1>Capture Flow</h1>
+        <p class="sub" id="hubLabel">hub: …</p>
+      </div>
+      <button type="button" class="linkish" id="openOptions" title="设置">设置</button>
+    </header>
+
+    <section class="card">
+      <label class="label">当前页</label>
+      <p class="url" id="pageUrl" title="">（读取中…）</p>
+      <p class="muted" id="pageTitle"></p>
+    </section>
+
+    <section class="card row">
+      <label class="check">
+        <input type="checkbox" id="autoAi" />
+        捕获后跑 AI
+      </label>
+      <select id="recipeId" aria-label="Recipe">
+        <option value="summarize">summarize</option>
+        <option value="outline">outline</option>
+        <option value="qa-prep">qa-prep</option>
+      </select>
+    </section>
+
+    <div class="actions">
+      <button type="button" class="primary" id="captureBtn">捕获到 Hub</button>
+    </div>
+
+    <section class="card status" id="statusCard" hidden>
+      <div class="status-line">
+        <span class="dot" id="statusDot"></span>
+        <strong id="statusText">idle</strong>
+      </div>
+      <pre class="log" id="statusLog"></pre>
+    </section>
+
+    <footer class="footer">
+      <span id="healthText" class="muted">checking hub…</span>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

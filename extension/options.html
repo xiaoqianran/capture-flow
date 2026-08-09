@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capture Flow Settings</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      body {
+        width: auto;
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      input[type="url"],
+      input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+      }
+      .field {
+        margin-bottom: 12px;
+      }
+      .field label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .hint {
+        margin-top: 6px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      #saveMsg {
+        margin-top: 10px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Capture Flow 设置</h1>
+    <p class="muted">扩展只连接本机 Hub，不会上传页面内容到第三方。</p>
+
+    <section class="card">
+      <div class="field">
+        <label for="hubUrl">Hub Base URL</label>
+        <input id="hubUrl" type="url" placeholder="http://127.0.0.1:8080" />
+        <p class="hint">默认 http://127.0.0.1:8080 · 需先启动 <code>go run ./cmd/hub</code></p>
+      </div>
+      <div class="field">
+        <label class="check">
+          <input type="checkbox" id="autoAi" />
+          默认捕获后运行 AI
+        </label>
+      </div>
+      <div class="field">
+        <label for="recipeId">默认 Recipe</label>
+        <select id="recipeId">
+          <option value="summarize">summarize · 中文摘要</option>
+          <option value="outline">outline · 大纲</option>
+          <option value="qa-prep">qa-prep · 问答要点</option>
+        </select>
+      </div>
+      <button type="button" class="primary" id="saveBtn">保存</button>
+      <div id="saveMsg" class="muted"></div>
+    </section>
+
+    <section class="card">
+      <p class="muted" style="margin: 0">
+        快捷键默认 <strong>Ctrl+Shift+Y</strong>（Mac: ⌘⇧Y）捕获当前页。可在
+        <code>chrome://extensions/shortcuts</code> 修改。
+      </p>
+    </section>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

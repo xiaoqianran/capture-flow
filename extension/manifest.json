@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Capture Flow",
+  "version": "0.1.0",
+  "description": "Capture the current page into your local Capture Flow hub (OpenCLI pipeline).",
+  "action": {
+    "default_title": "Capture Flow",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "permissions": ["storage", "activeTab", "tabs"],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "commands": {
+    "capture-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Capture current page to Capture Flow hub"
+    }
+  }
+}

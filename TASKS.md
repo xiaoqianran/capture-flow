@@ -18,7 +18,7 @@
 | **M5** 人机入口 | CLI + Chrome 最小扩展 | 日常捕获不靠手写 curl |
 | **M6** Hub 体验 | Library / Jobs / 失败透明 | 本地 UI 可完成主路径 |
 
-当前焦点：**M4 AI 假跑已通 → 接真实 API Key 或做 Extension / UI**。
+当前焦点：**Extension 已可装 → 可选 Local Hub Web UI / 选中文本捕获 / 流式 AI**。
 
 **技术栈（已锁定）**：Hub/Daemon = **Go**；Web/Extension/Protocol = **Bun + TypeScript**；Collector = **仅 OpenCLI**；站点顺序 = **知乎 → 通用网页 → B站/YouTube**。详见 `ARCHITECTURE.md` §9。
 
@@ -114,13 +114,13 @@
 |----|------|--------|------|------|
 | M5-01 | CLI：`capture` / `job` / `doc` / `health` | P0 | done | `cmd/capture` |
 | M5-02 | 本地 HTTP API（触发采集 + 查询） | P0 | done | POST/GET jobs + docs |
-| M5-03 | Chrome Extension：当前页捕获 | P0 | todo | M5-02 |
+| M5-03 | Chrome Extension：当前页捕获 | P0 | done | `extension/` MV3 popup + 快捷键 |
 | M5-04 | Extension：选中文本捕获 | P1 | todo | M5-03 |
 | M5-05 | Schedule 触发器（cron 式） | P2 | todo | M5-01 |
-| M5-06 | 进度与失败文案（用户可读） | P0 | todo | M3-03 |
+| M5-06 | 进度与失败文案（用户可读） | P0 | done | popup 展示 status/trace/错误 |
 
-**退出**：浏览器一点 → Hub 入库；CLI 可复现同一 Job。
-
+**退出**：浏览器一点 → Hub 入库；CLI 可复现同一 Job。  
+**退出证据**：`extension/README.md` 加载步骤；popup → `POST /jobs` → 轮询 done。
 ---
 
 ## M6 — Local Hub 体验
@@ -231,6 +231,7 @@ Hub / Daemon        Go
 | 2026-08-10 | M2：CLI OpenCLI Runner + ZhihuAdapter；真实回答端到端 done |
 | 2026-08-10 | M2-05 去重 + generic-web + cmd/capture 客户端 |
 | 2026-08-10 | M4 AI：Recipe + OpenAI 兼容 Dispatcher + Response 存储 |
+| 2026-08-10 | M5-03 Chrome Extension：当前页捕获 + 可选 AI |
 
 ---
 
