@@ -1,0 +1,96 @@
+/* Ergonomic density pass: keep the compact console feel without sacrificing readability. */
+
+.brand strong { font-size: 14px; }
+.brand small { font-size: 11px; }
+.side nav button { min-height: 44px; }
+.side nav button b { font-size: 13px; }
+.side nav em { min-width: 22px; height: 22px; font-size: 11px; }
+.hub header span { font-size: 12px; }
+.hub header code, .hub footer span, .hub p, .theme small { font-size: 10px; }
+.workers span, .workers small, .hub footer b, .theme { font-size: 11px; }
+.theme { min-height: 38px; }
+
+.top > div:first-child > small { font-size: 10px; }
+.top p { font-size: 12px; }
+.top > div:last-child > span { font-size: 10px; }
+.offline strong { font-size: 12px; }
+.offline small, .offline code { font-size: 10px; }
+
+.doclist > header { height: 60px; }
+.doclist > header label { height: 39px; }
+.doclist > header input { font-size: 12px; }
+.doclist > header > small { font-size: 10px; }
+.doclist > div { height: calc(100vh - 178px); }
+.doclist > div > button { min-height: 64px; padding-block: 12px; }
+.doclist button strong { font-size: 13px; }
+.doclist button small { font-size: 11px; }
+.doclist button em { font-size: 10px; }
+
+.readerhead > p { font-size: 11px; }
+.readerhead > p span, .results header span { min-height: 22px; font-size: 10px; }
+.readerhead footer { font-size: 12px; }
+.readerhead footer button, .readerhead footer a { min-height: 32px; display: inline-flex; align-items: center; font-size: 11px; }
+.aibar { min-height: 54px; }
+.aibar select { height: 36px; font-size: 12px; }
+.aibar > small { font-size: 11px; }
+.primary, .secondary { min-height: 38px; padding-inline: 13px; font-size: 12px; }
+.badge { min-height: 24px; padding-inline: 8px; font-size: 10.5px; }
+.tabs button { min-height: 44px; font-size: 12px; }
+.tabs i { min-width: 19px; height: 19px; font-size: 9px; }
+.readerbody > article { font-size: 14px; line-height: 1.82; }
+.results header b { font-size: 11px; }
+.results header small { font-size: 10px; }
+.results p { font-size: 13px; line-height: 1.75; }
+.metadata > div { min-height: 50px; }
+.metadata span { font-size: 10.5px; }
+.metadata code { font-size: 11px; }
+.empty strong { font-size: 13px; }
+.empty p { font-size: 11.5px; }
+
+.stats > div { min-height: 80px; }
+.stats span { font-size: 10.5px; }
+.stats span b { font-size: 22px; }
+.stats span small { font-size: 10px; }
+.lanes button { min-height: 34px; font-size: 11.5px; }
+.lanes i { font-size: 10px; }
+.tasks > header { height: 48px; font-size: 12px; }
+.tasks > header small { font-size: 10px; }
+.tasks > div { height: calc(100vh - 295px); }
+.tasks > div > button { min-height: 74px; padding: 12px 14px; }
+.tasks button span > small { font-size: 10px; }
+.tasks button > strong { font-size: 12.5px; }
+.tasks button > em { font-size: 10.5px; }
+
+.detail > header a, .detail > header div > span:not(.badge), .detail > header > code { font-size: 10.5px; }
+.facts span { font-size: 10px; }
+.facts b, .facts code { font-size: 12px; }
+.error > span, .error strong { font-size: 11px; }
+.detail > h3 { font-size: 12px; }
+.detail > ol li { min-height: 48px; }
+.detail > ol code { font-size: 11px; }
+.detail > ol small { font-size: 9.5px; }
+.ids > div, .ids code { font-size: 10.5px; }
+
+.capturehero > div > small { font-size: 10px; }
+.capturehero p { font-size: 13px; }
+.capturehero label { font-size: 11px; }
+.capturehero form > section span { font-size: 11px; }
+.capturehero input { font-size: 13px; }
+.capturehero form > small { font-size: 10.5px; }
+.method h3 { font-size: 15px; }
+.method p { font-size: 12px; }
+.method footer { font-size: 10.5px; }
+.method header > span { font-size: 10px; }
+.toasts span { font-size: 12px; }
+
+@media (max-width: 860px) {
+  .doclist > div { height: 260px; }
+  .tasks > div { height: 270px; }
+}
+
+@media (max-width: 600px) {
+  .readerbody > article { font-size: 14px; }
+  .capturehero p { font-size: 12.5px; }
+  .facts span { font-size: 9.5px; }
+  .facts b, .facts code { font-size: 11px; }
+}
