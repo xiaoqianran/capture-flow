@@ -1,9 +1,14 @@
 import {
   detectPageRoute,
-  formatJobLine,
+  extractBrowserSnapshot,
   type PageRouteInfo,
 } from "@capture-flow/core";
-import type { CaptureFlowHubClient, CollectJob, HubSettings } from "@capture-flow/hub-client";
+import type {
+  AIQueueStats,
+  CaptureFlowHubClient,
+  CaptureReceipt,
+  HubSettings,
+} from "@capture-flow/hub-client";
 import type { CaptureFlowRuntime } from "@capture-flow/runtime";
 
 import { STUDIO_CSS } from "./styles";
@@ -26,15 +31,16 @@ export function createStudio(
   let busy = false;
   let unsubNav: (() => void) | null = null;
   let destroyed = false;
+  let autoTimer: ReturnType<typeof setTimeout> | null = null;
 
   const els = {
     fab: null as HTMLButtonElement | null,
-    panel: null as HTMLElement | null,
     titleSub: null as HTMLElement | null,
     pageUrl: null as HTMLElement | null,
     siteBadge: null as HTMLElement | null,
     health: null as HTMLElement | null,
     autoAi: null as HTMLInputElement | null,
+    autoCapture: null as HTMLInputElement | null,
     recipe: null as HTMLSelectElement | null,
     captureBtn: null as HTMLButtonElement | null,
     statusDot: null as HTMLElement | null,
@@ -51,6 +57,11 @@ export function createStudio(
     els.statusLog.textContent = log;
   }
 
+  function queueLine(stats?: AIQueueStats): string {
+    if (!stats) return "";
+    return `AI queue · running ${stats.running}/${stats.concurrency} · queued ${stats.queued} · retry ${stats.retry_wait}`;
+  }
+
   async function loadSettings(): Promise<void> {
     settings = await hub.getSettings();
     applySettingsToDom();
@@ -63,6 +74,7 @@ export function createStudio(
     root.classList.toggle("cf-side-right", settings.dockSide !== "left");
     root.classList.toggle("cf-side-left", settings.dockSide === "left");
     if (els.autoAi) els.autoAi.checked = settings.autoAi;
+    if (els.autoCapture) els.autoCapture.checked = settings.autoCapture;
     if (els.recipe) els.recipe.value = settings.recipeId;
     if (els.hubUrlInput) els.hubUrlInput.value = settings.hubUrl;
     if (els.titleSub) els.titleSub.textContent = settings.hubUrl;
@@ -74,18 +86,15 @@ export function createStudio(
       els.pageUrl.textContent = route.href || "(no url)";
       els.pageUrl.title = route.href;
     }
-    if (els.siteBadge) {
-      els.siteBadge.textContent = route.site;
-    }
-    if (els.captureBtn) {
-      els.captureBtn.disabled = busy || !route.canCapture;
-    }
+    if (els.siteBadge) els.siteBadge.textContent = route.site;
+    if (els.captureBtn) els.captureBtn.disabled = busy || !route.canCapture;
   }
 
   async function pingHealth(): Promise<void> {
     try {
       const h = await hub.health();
-      const text = `hub ok · ai ${h.ai_configured ? "on" : "off"}`;
+      const queue = h.ai_queue ? ` · ${queueLine(h.ai_queue)}` : "";
+      const text = `hub ok · ai ${h.ai_configured ? "on" : "off"}${queue}`;
       if (els.health) {
         els.health.textContent = text;
         els.health.style.color = "";
@@ -115,6 +124,7 @@ export function createStudio(
   async function persistUiPrefs(): Promise<void> {
     settings = await hub.saveSettings({
       autoAi: Boolean(els.autoAi?.checked),
+      autoCapture: Boolean(els.autoCapture?.checked),
       recipeId: els.recipe?.value || "summarize",
     });
   }
@@ -126,34 +136,70 @@ export function createStudio(
     await pingHealth();
   }
 
-  async function captureCurrent(): Promise<void> {
-    if (busy) return;
+  function formatReceipt(receipt: CaptureReceipt, stats?: AIQueueStats): string {
+    const lines = [
+      `document_id: ${receipt.document_id}`,
+      `revision_id: ${receipt.revision_id}`,
+      `deduped: ${receipt.deduped}`,
+    ];
+    if (receipt.ai_job) {
+      lines.push(
+        `AI job: ${receipt.ai_job.id}`,
+        `AI status: ${receipt.ai_job.status}`,
+        `model: ${receipt.ai_job.model || "default"}`,
+      );
+    }
+    if (receipt.ai_error) lines.push(`AI enqueue error: ${receipt.ai_error}`);
+    if (stats) lines.push(queueLine(stats));
+    return lines.join("\n");
+  }
+
+  async function capture(origin: "manual" | "auto"): Promise<void> {
+    if (busy || destroyed) return;
     refreshRoute();
     if (!route.canCapture) {
-      setStatus("err", "unsupported", route.reason || "cannot capture this page");
+      if (origin === "manual") setStatus("err", "unsupported", route.reason || "cannot capture this page");
       return;
     }
     busy = true;
     if (els.captureBtn) els.captureBtn.disabled = true;
-    setStatus("run", "queued…", `POST /jobs\n${route.href}`);
+    setStatus("run", origin === "auto" ? "auto snapshot…" : "snapshot…", `${route.href}\nDOM → Local Hub`);
     try {
       await persistUiPrefs();
-      const result = await hub.capturePage(route.href, {
-        onTick: (job: CollectJob) => {
-          setStatus("run", `${job.status}`, formatJobLine(job));
-        },
+      const snapshot = extractBrowserSnapshot(document, route.href);
+      const receipt = await hub.captureSnapshot(snapshot, {
+        autoAi: settings?.autoAi,
+        recipeId: settings?.recipeId,
       });
-      let log = formatJobLine(result.job);
-      if (result.ai) {
-        log += `\n\nAI ${result.ai.recipe_id} · ${result.ai.id}\n${String(result.ai.content_md || "").slice(0, 500)}`;
-      }
-      setStatus("ok", result.ai ? "done + AI" : "done", log);
+      const stats = await hub.queueStats().catch(() => undefined);
+      const aiStatus = receipt.ai_job?.status;
+      const label = receipt.ai_job
+        ? `stored · AI ${aiStatus}`
+        : receipt.deduped
+          ? "deduped"
+          : "stored";
+      setStatus("ok", label, formatReceipt(receipt, stats));
+      void pingHealth();
     } catch (e) {
       setStatus("err", "failed", e instanceof Error ? e.message : String(e));
     } finally {
       busy = false;
       if (els.captureBtn) els.captureBtn.disabled = !route.canCapture;
     }
+  }
+
+  function scheduleAutoCapture(): void {
+    if (autoTimer) clearTimeout(autoTimer);
+    autoTimer = null;
+    if (!settings?.autoCapture || !route.canCapture || destroyed) return;
+    autoTimer = setTimeout(() => {
+      autoTimer = null;
+      void capture("auto");
+    }, 1200);
+  }
+
+  async function captureCurrent(): Promise<void> {
+    await capture("manual");
   }
 
   function buildDom(): HTMLDivElement {
@@ -182,15 +228,16 @@ export function createStudio(
             </div>
             <div class="cf-card">
               <div class="cf-row">
-                <label><input type="checkbox" id="cf-auto-ai" /> Capture 后跑 AI</label>
+                <label><input type="checkbox" id="cf-auto-capture" /> 新页面自动采集</label>
+                <label><input type="checkbox" id="cf-auto-ai" /> 自动加入 AI 队列</label>
+              </div>
+              <div class="cf-row" style="margin-top:10px">
                 <select id="cf-recipe" aria-label="recipe">
                   <option value="summarize">summarize</option>
                   <option value="outline">outline</option>
                   <option value="qa-prep">qa-prep</option>
                 </select>
-              </div>
-              <div style="margin-top:10px">
-                <button type="button" class="cf-primary" id="cf-capture">捕获到 Local Hub</button>
+                <button type="button" class="cf-primary" id="cf-capture">立即采集 Snapshot</button>
               </div>
             </div>
             <div class="cf-card">
@@ -198,7 +245,7 @@ export function createStudio(
                 <span class="cf-dot" id="cf-status-dot"></span>
                 <span id="cf-status-text">idle</span>
               </div>
-              <pre class="cf-log" id="cf-status-log">Ready. Hub 需已启动：go run ./cmd/hub</pre>
+              <pre class="cf-log" id="cf-status-log">Browser DOM → /captures → durable AI queue</pre>
               <div class="cf-foot" id="cf-health">checking hub…</div>
             </div>
           </div>
@@ -218,7 +265,7 @@ export function createStudio(
                 <button type="button" class="cf-ghost" id="cf-dock-left">Left</button>
                 <button type="button" class="cf-ghost" id="cf-dock-right">Right</button>
               </div>
-              <p class="cf-foot">快捷键：Alt+Shift+C 捕获 · Alt+Shift+P 面板</p>
+              <p class="cf-foot">快捷键：Alt+Shift+C 立即采集 · Alt+Shift+P 面板</p>
             </div>
           </div>
         </div>
@@ -230,12 +277,12 @@ export function createStudio(
   function wire(): void {
     if (!root) return;
     els.fab = root.querySelector("#cf-fab");
-    els.panel = root.querySelector("#cf-panel");
     els.titleSub = root.querySelector("#cf-title-sub");
     els.pageUrl = root.querySelector("#cf-page-url");
     els.siteBadge = root.querySelector("#cf-site");
     els.health = root.querySelector("#cf-health");
     els.autoAi = root.querySelector("#cf-auto-ai");
+    els.autoCapture = root.querySelector("#cf-auto-capture");
     els.recipe = root.querySelector("#cf-recipe");
     els.captureBtn = root.querySelector("#cf-capture");
     els.statusDot = root.querySelector("#cf-status-dot");
@@ -246,14 +293,13 @@ export function createStudio(
 
     els.fab?.addEventListener("click", () => void setOpen(true));
     root.querySelector("#cf-btn-close")?.addEventListener("click", () => void setOpen(false));
-    root.querySelector("#cf-btn-settings")?.addEventListener("click", () => {
-      root?.classList.add("cf-settings-open");
-    });
-    root.querySelector("#cf-back-main")?.addEventListener("click", () => {
-      root?.classList.remove("cf-settings-open");
-    });
+    root.querySelector("#cf-btn-settings")?.addEventListener("click", () => root?.classList.add("cf-settings-open"));
+    root.querySelector("#cf-back-main")?.addEventListener("click", () => root?.classList.remove("cf-settings-open"));
     els.captureBtn?.addEventListener("click", () => void captureCurrent());
     els.autoAi?.addEventListener("change", () => void persistUiPrefs());
+    els.autoCapture?.addEventListener("change", () => {
+      void persistUiPrefs().then(scheduleAutoCapture);
+    });
     els.recipe?.addEventListener("change", () => void persistUiPrefs());
     root.querySelector("#cf-save-hub")?.addEventListener("click", () => void saveHubUrl());
     root.querySelector("#cf-dock-left")?.addEventListener("click", async () => {
@@ -275,13 +321,17 @@ export function createStudio(
       void loadSettings().then(() => {
         refreshRoute();
         void pingHealth();
+        scheduleAutoCapture();
       });
       unsubNav = runtime.page.onNavigate(() => {
         refreshRoute();
+        scheduleAutoCapture();
       });
     },
     destroy() {
       destroyed = true;
+      if (autoTimer) clearTimeout(autoTimer);
+      autoTimer = null;
       unsubNav?.();
       unsubNav = null;
       root?.remove();

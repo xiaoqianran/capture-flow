@@ -2,6 +2,7 @@
 export const STORAGE_KEYS = {
   hubUrl: "cf.hubUrl",
   autoAi: "cf.autoAi",
+  autoCapture: "cf.autoCapture",
   recipeId: "cf.recipeId",
   panelOpen: "cf.panelOpen",
   dockSide: "cf.dockSide",

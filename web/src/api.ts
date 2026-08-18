@@ -1,4 +1,4 @@
-import type { AIResponse, ContentPacket, DocumentSummary, Health, Job, Recipe } from "./types";
+import type { AIJob, AIQueueStats, AIResponse, ContentPacket, DocumentSummary, Health, Job, Recipe } from "./types";
 
 // Dev: Vite proxies /api → :8080. Prod (served by hub): same-origin API at root.
 const API_BASE =
@@ -39,11 +39,13 @@ export const api = {
   listDocs: (limit = 50) => request<DocumentSummary[]>(`/docs?limit=${limit}`),
   getDoc: (id: string) => request<ContentPacket>(`/docs/${encodeURIComponent(id)}`),
   listRecipes: () => request<Recipe[]>("/recipes"),
-  runAi: (documentId: string, recipeId: string) =>
-    request<AIResponse>("/ai/run", {
+  enqueueAi: (documentId: string, recipeId: string) =>
+    request<AIJob>("/ai/jobs", {
       method: "POST",
       body: JSON.stringify({ document_id: documentId, recipe_id: recipeId }),
     }),
+  getAiJob: (id: string) => request<AIJob>(`/ai/jobs/${encodeURIComponent(id)}`),
+  aiQueue: () => request<AIQueueStats>("/ai/queue"),
   listDocAi: (documentId: string) =>
     request<AIResponse[]>(`/docs/${encodeURIComponent(documentId)}/ai`),
 };

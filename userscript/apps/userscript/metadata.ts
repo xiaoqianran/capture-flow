@@ -14,9 +14,9 @@ export interface UserscriptMetadata {
 export const userscriptMetadata: UserscriptMetadata = {
   name: "Capture Flow",
   namespace: "https://github.com/xiaoqianran/capture-flow",
-  version: "0.1.0",
+  version: "0.2.0",
   description:
-    "Local Hub 页面捕获工作台：当前页入队 OpenCLI 采集、轮询 Job、可选 AI Recipe（Studio Dock）",
+    "实时采集当前页面 DOM 到 Local Hub，并通过持久化 AI 队列按固定并发后台处理（Studio Dock）",
   author: "capture-flow",
   match: ["*://*/*"],
   connect: [

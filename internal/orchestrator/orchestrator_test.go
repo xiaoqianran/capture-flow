@@ -24,6 +24,7 @@ func TestSubmitFakePipeline(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 
 	orch := orchestrator.New(st, []adapter.Adapter{fakeadapter.New()}, fakerunner.New())
+	t.Cleanup(orch.Close)
 	job, err := orch.Submit(context.Background(), domain.CaptureTarget{
 		URL:  "fake://demo",
 		Task: "full_text",
@@ -67,6 +68,7 @@ func TestDedupSameHash(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 
 	orch := orchestrator.New(st, []adapter.Adapter{fakeadapter.New()}, fakerunner.New())
+	t.Cleanup(orch.Close)
 
 	j1, err := orch.Submit(context.Background(), domain.CaptureTarget{URL: "fake://dedup"})
 	if err != nil {

@@ -10,18 +10,22 @@ import (
 
 func TestIsAPIPath(t *testing.T) {
 	cases := map[string]bool{
-		"/health":                 true,
-		"/jobs":                   true,
-		"/jobs/job_1":             true,
-		"/docs":                   true,
-		"/docs/doc_1":             true,
-		"/docs/doc_1/ai":          true,
-		"/recipes":                true,
-		"/ai/run":                 true,
-		"/ai/responses/ai_1":      true,
-		"/":                       false,
-		"/assets/index.js":        false,
-		"/index.html":             false,
+		"/health":            true,
+		"/captures":          true,
+		"/jobs":              true,
+		"/jobs/job_1":        true,
+		"/docs":              true,
+		"/docs/doc_1":        true,
+		"/docs/doc_1/ai":     true,
+		"/recipes":           true,
+		"/ai/run":            true,
+		"/ai/jobs":           true,
+		"/ai/jobs/aijob_1":   true,
+		"/ai/queue":          true,
+		"/ai/responses/ai_1": true,
+		"/":                  false,
+		"/assets/index.js":   false,
+		"/index.html":        false,
 	}
 	for p, want := range cases {
 		if got := isAPIPath(p); got != want {

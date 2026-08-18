@@ -4,3 +4,5 @@ export * from "./shortcuts";
 export * from "./route";
 export * from "./job";
 export * from "./persistence";
+
+export * from "./snapshot";
