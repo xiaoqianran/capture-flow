@@ -3,6 +3,9 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,19 +15,55 @@ import (
 	"github.com/xiaoqianran/capture-flow/internal/store"
 )
 
-// Orchestrator runs Job → Adapter → Runner → Packet → Store.
+const defaultCaptureConcurrency = 2
+
+// Orchestrator owns the durable capture queue and the browser-snapshot ingest path.
 type Orchestrator struct {
-	store    *store.Store
-	adapters []adapter.Adapter
-	runner   runner.Runner
+	store       *store.Store
+	adapters    []adapter.Adapter
+	runner      runner.Runner
+	concurrency int
+	wake        chan struct{}
+	stop        chan struct{}
+	wg          sync.WaitGroup
+	closeOnce   sync.Once
 }
 
 func New(st *store.Store, adapters []adapter.Adapter, r runner.Runner) *Orchestrator {
-	return &Orchestrator{store: st, adapters: adapters, runner: r}
+	return NewWithConcurrency(st, adapters, r, defaultCaptureConcurrency)
 }
 
+func NewWithConcurrency(st *store.Store, adapters []adapter.Adapter, r runner.Runner, concurrency int) *Orchestrator {
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	o := &Orchestrator{
+		store:       st,
+		adapters:    adapters,
+		runner:      r,
+		concurrency: concurrency,
+		wake:        make(chan struct{}, 1),
+		stop:        make(chan struct{}),
+	}
+	_ = st.RequeueIncompleteCaptureJobs()
+	for i := 0; i < concurrency; i++ {
+		o.wg.Add(1)
+		go o.worker()
+	}
+	o.notify()
+	return o
+}
+
+func (o *Orchestrator) Concurrency() int { return o.concurrency }
+
+func (o *Orchestrator) Close() {
+	o.closeOnce.Do(func() { close(o.stop) })
+	o.wg.Wait()
+}
+
+// Submit persists a URL-based fallback capture. Workers, not request goroutines, execute OpenCLI.
 func (o *Orchestrator) Submit(ctx context.Context, target domain.CaptureTarget) (*domain.Job, error) {
-	if target.URL == "" {
+	if strings.TrimSpace(target.URL) == "" {
 		return nil, fmt.Errorf("%s: url is required", domain.ErrInvalidTarget)
 	}
 	if target.Task == "" {
@@ -43,10 +82,72 @@ func (o *Orchestrator) Submit(ctx context.Context, target domain.CaptureTarget) 
 	if err := o.store.SaveJob(job); err != nil {
 		return nil, err
 	}
-
-	// M1: process async so POST returns quickly; clients poll GET /jobs/:id.
-	go o.process(context.Background(), job.ID)
+	o.notify()
 	return job, nil
+}
+
+// CaptureSnapshot persists content already extracted from the live browser DOM.
+func (o *Orchestrator) CaptureSnapshot(req domain.BrowserCaptureRequest) (*domain.CaptureReceipt, error) {
+	rawURL := strings.TrimSpace(req.URL)
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return nil, fmt.Errorf("%s: browser capture requires http(s) url", domain.ErrInvalidTarget)
+	}
+	content := strings.TrimSpace(req.ContentMD)
+	if content == "" {
+		return nil, fmt.Errorf("%s: content_md is required", domain.ErrInvalidTarget)
+	}
+
+	docType := strings.TrimSpace(req.Type)
+	if docType == "" {
+		docType = "page"
+	}
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		source = strings.ToLower(parsed.Hostname())
+	}
+	if source == "" {
+		source = "browser"
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = rawURL
+	}
+	capturedAt := strings.TrimSpace(req.CapturedAt)
+	if capturedAt == "" {
+		capturedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	contentRaw := req.ContentRaw
+	if strings.TrimSpace(contentRaw) == "" {
+		contentRaw = content
+	}
+
+	packet := domain.ContentPacket{
+		SchemaVersion:  domain.ContentPacketSchemaVersion,
+		DocumentID:     domain.DocumentID(rawURL, docType),
+		RevisionID:     domain.RevisionID(),
+		Source:         source,
+		Type:           docType,
+		URL:            rawURL,
+		Title:          title,
+		Author:         strings.TrimSpace(req.Author),
+		ContentMD:      content,
+		ContentRaw:     contentRaw,
+		Collector:      domain.CollectorBrowser,
+		Adapter:        "browser-dom",
+		AdapterVersion: "1.0.0",
+		CapturedAt:     capturedAt,
+		ContentHash:    domain.ContentHash(content),
+	}
+	revisionID, deduped, err := o.store.SavePacketIfChanged(packet)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", domain.ErrStoreFailed, err)
+	}
+	return &domain.CaptureReceipt{
+		DocumentID: packet.DocumentID,
+		RevisionID: revisionID,
+		Deduped:    deduped,
+	}, nil
 }
 
 func (o *Orchestrator) GetJob(id string) (*domain.Job, error) {
@@ -65,6 +166,34 @@ func (o *Orchestrator) ListDocuments(limit int) ([]domain.DocumentSummary, error
 	return o.store.ListDocuments(limit)
 }
 
+func (o *Orchestrator) notify() {
+	select {
+	case o.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (o *Orchestrator) worker() {
+	defer o.wg.Done()
+	ticker := time.NewTicker(750 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		for {
+			job, err := o.store.ClaimNextCaptureJob()
+			if err != nil || job == nil {
+				break
+			}
+			o.process(context.Background(), job.ID)
+		}
+		select {
+		case <-o.stop:
+			return
+		case <-o.wake:
+		case <-ticker.C:
+		}
+	}
+}
+
 func (o *Orchestrator) process(ctx context.Context, jobID string) {
 	job, err := o.store.GetJob(jobID)
 	if err != nil {
@@ -81,7 +210,6 @@ func (o *Orchestrator) process(ctx context.Context, jobID string) {
 		_ = o.store.SaveJob(job)
 	}
 
-	// planning
 	job.Status = domain.JobPlanning
 	job.Trace = append(job.Trace, "planning")
 	job.UpdatedAt = time.Now().UTC()
@@ -104,7 +232,6 @@ func (o *Orchestrator) process(ctx context.Context, jobID string) {
 	job.UpdatedAt = time.Now().UTC()
 	_ = o.store.SaveJob(job)
 
-	// running
 	job.Status = domain.JobRunning
 	job.Trace = append(job.Trace, "running:"+o.runner.Name())
 	job.UpdatedAt = time.Now().UTC()
@@ -126,7 +253,6 @@ func (o *Orchestrator) process(ctx context.Context, jobID string) {
 		return
 	}
 
-	// normalizing
 	job.Status = domain.JobNormalizing
 	job.Trace = append(job.Trace, "normalizing")
 	job.UpdatedAt = time.Now().UTC()
@@ -138,7 +264,6 @@ func (o *Orchestrator) process(ctx context.Context, jobID string) {
 		return
 	}
 
-	// stored (or dedup if same content_hash)
 	revID, deduped, err := o.store.SavePacketIfChanged(packet)
 	if err != nil {
 		fail(domain.ErrStoreFailed, err.Error())

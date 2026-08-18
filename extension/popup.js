@@ -1,12 +1,5 @@
-import {
-  createJob,
-  formatJobFailure,
-  getSettings,
-  healthCheck,
-  runAi,
-  saveSettings,
-  waitJob,
-} from "./lib/hub.js";
+import { captureSnapshot, getSettings, healthCheck, queueStats, saveSettings } from "./lib/hub.js";
+import { snapshotTab } from "./page-capture.js";
 
 const els = {
   hubLabel: document.getElementById("hubLabel"),
@@ -23,42 +16,35 @@ const els = {
   healthText: document.getElementById("healthText"),
 };
 
-/** @type {{ hubUrl: string, autoAi: boolean, recipeId: string }} */
 let settings = { hubUrl: "http://127.0.0.1:8080", autoAi: false, recipeId: "summarize" };
-/** @type {chrome.tabs.Tab | null} */
 let activeTab = null;
 
-init().catch((e) => {
-  setStatus("err", "init failed", String(e.message || e));
-});
+init().catch((e) => setStatus("err", "init failed", String(e.message || e)));
 
 async function init() {
   settings = await getSettings();
   els.hubLabel.textContent = `hub: ${settings.hubUrl}`;
   els.autoAi.checked = settings.autoAi;
   els.recipeId.value = settings.recipeId;
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  activeTab = tab || null;
-  if (tab?.url) {
-    els.pageUrl.textContent = tab.url;
-    els.pageUrl.title = tab.url;
-    els.pageTitle.textContent = tab.title || "";
+  [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (activeTab?.url) {
+    els.pageUrl.textContent = activeTab.url;
+    els.pageUrl.title = activeTab.url;
+    els.pageTitle.textContent = activeTab.title || "";
   } else {
     els.pageUrl.textContent = "（无可用标签页）";
     els.captureBtn.disabled = true;
   }
-
   try {
     const health = await healthCheck(settings.hubUrl);
-    const ai = health.ai_configured ? "ai:on" : "ai:off";
-    els.healthText.textContent = `hub ok · ${ai}`;
-    els.healthText.style.color = "";
+    const q = health.ai_queue;
+    els.healthText.textContent = q
+      ? `hub ok · ai ${health.ai_configured ? "on" : "off"} · ${q.running}/${q.concurrency} running · ${q.queued} queued`
+      : `hub ok · ai ${health.ai_configured ? "on" : "off"}`;
   } catch (e) {
     els.healthText.textContent = `hub unreachable · ${e.message || e}`;
     els.healthText.style.color = "var(--err)";
   }
-
   els.captureBtn.addEventListener("click", onCapture);
   els.openOptions.addEventListener("click", () => chrome.runtime.openOptionsPage());
   els.autoAi.addEventListener("change", persistUiSettings);
@@ -72,49 +58,27 @@ async function persistUiSettings() {
 }
 
 async function onCapture() {
-  const url = activeTab?.url || "";
-  if (!/^https?:/i.test(url)) {
-    setStatus("err", "unsupported url", "Only http(s) pages can be captured via OpenCLI adapters.");
+  if (!activeTab?.id || !/^https?:/i.test(activeTab.url || "")) {
+    setStatus("err", "unsupported url", "Only http(s) pages can be captured.");
     return;
   }
-
   els.captureBtn.disabled = true;
-  setStatus("running", "queued…", `POST ${settings.hubUrl}/jobs\n${url}`);
-
+  setStatus("running", "extracting DOM…", activeTab.url);
   try {
     await persistUiSettings();
-    const job = await createJob(settings.hubUrl, { url, task: "full_text" });
-    setStatus("running", `job ${shortId(job.id)}`, formatJobLine(job));
-
-    const done = await waitJob(settings.hubUrl, job.id, {
-      onTick: (j) => setStatus("running", `job ${shortId(j.id)} · ${j.status}`, formatJobLine(j)),
-    });
-
-    if (done.status !== "done") {
-      setStatus("err", `failed · ${done.status}`, formatJobFailure(done));
-      return;
-    }
-
-    let log = formatJobLine(done);
-    if (settings.autoAi && done.document_id) {
-      setStatus("running", "running AI…", log + "\n→ POST /ai/run");
-      try {
-        const ai = await runAi(settings.hubUrl, {
-          document_id: done.document_id,
-          recipe_id: settings.recipeId,
-        });
-        log += `\nAI ok · ${ai.id}\nrecipe=${ai.recipe_id} model=${ai.model}`;
-        if (ai.content_md) {
-          log += `\n---\n${String(ai.content_md).slice(0, 500)}`;
-        }
-      } catch (e) {
-        log += `\nAI failed: ${e.message || e}`;
-        setStatus("warn", "captured · AI failed", log);
-        return;
-      }
-    }
-
-    setStatus("ok", "done", log);
+    const snapshot = await snapshotTab(activeTab.id);
+    setStatus("running", "sending snapshot…", `POST ${settings.hubUrl}/captures\n${snapshot.url}`);
+    const receipt = await captureSnapshot(settings.hubUrl, snapshot, settings);
+    const stats = await queueStats(settings.hubUrl).catch(() => null);
+    const lines = [
+      `document_id: ${receipt.document_id}`,
+      `revision_id: ${receipt.revision_id}`,
+      `deduped: ${receipt.deduped}`,
+      receipt.ai_job ? `AI: ${receipt.ai_job.status} · ${receipt.ai_job.id}` : null,
+      receipt.ai_error ? `AI enqueue error: ${receipt.ai_error}` : null,
+      stats ? `queue: running ${stats.running}/${stats.concurrency} · queued ${stats.queued}` : null,
+    ].filter(Boolean);
+    setStatus("ok", receipt.ai_job ? `stored · AI ${receipt.ai_job.status}` : "stored", lines.join("\n"));
   } catch (e) {
     setStatus("err", "error", String(e.message || e));
   } finally {
@@ -122,34 +86,9 @@ async function onCapture() {
   }
 }
 
-/**
- * @param {"running"|"ok"|"err"|"warn"} kind
- * @param {string} title
- * @param {string} log
- */
 function setStatus(kind, title, log) {
   els.statusCard.hidden = false;
   els.statusText.textContent = title;
   els.statusLog.textContent = log;
   els.statusDot.className = "dot " + (kind === "warn" ? "running" : kind);
-}
-
-/** @param {import('./lib/hub.js').Job} job */
-function formatJobLine(job) {
-  const lines = [
-    `id: ${job.id}`,
-    `status: ${job.status}`,
-    job.adapter ? `adapter: ${job.adapter}` : null,
-    job.collector ? `collector: ${job.collector}` : null,
-    job.document_id ? `document_id: ${job.document_id}` : null,
-    job.revision_id ? `revision_id: ${job.revision_id}` : null,
-    job.trace?.length ? `trace: ${job.trace.join(" → ")}` : null,
-    job.error_code ? `error: ${job.error_code} ${job.error_message || ""}` : null,
-  ].filter(Boolean);
-  return lines.join("\n");
-}
-
-function shortId(id) {
-  if (!id) return "";
-  return id.length > 14 ? id.slice(0, 14) + "…" : id;
 }

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Capture Flow",
   "version": "0.1.0",
-  "description": "Capture the current page into your local Capture Flow hub (OpenCLI pipeline).",
+  "description": "Capture the live browser DOM into the local Capture Flow hub and durable AI queue.",
   "action": {
     "default_title": "Capture Flow",
     "default_popup": "popup.html"
@@ -15,7 +15,12 @@
     "page": "options.html",
     "open_in_tab": false
   },
-  "permissions": ["storage", "activeTab", "tabs"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*"

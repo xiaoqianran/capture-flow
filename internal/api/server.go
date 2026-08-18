@@ -17,19 +17,20 @@ import (
 
 // Server exposes REST endpoints for the hub.
 type Server struct {
-	orch   *orchestrator.Orchestrator
-	ai     *ai.Service
-	mux    *http.ServeMux
-	webDir string // optional static UI root (e.g. web/dist)
+	orch    *orchestrator.Orchestrator
+	ai      *ai.Service
+	aiQueue *ai.Queue
+	mux     *http.ServeMux
+	webDir  string // optional static UI root (e.g. web/dist)
 }
 
-func New(orch *orchestrator.Orchestrator, aiSvc *ai.Service) *Server {
-	return NewWithWeb(orch, aiSvc, "")
+func New(orch *orchestrator.Orchestrator, aiSvc *ai.Service, aiQueue *ai.Queue) *Server {
+	return NewWithWeb(orch, aiSvc, aiQueue, "")
 }
 
 // NewWithWeb creates a server that also serves a built Local Hub UI from webDir when non-empty.
-func NewWithWeb(orch *orchestrator.Orchestrator, aiSvc *ai.Service, webDir string) *Server {
-	s := &Server{orch: orch, ai: aiSvc, mux: http.NewServeMux(), webDir: strings.TrimSpace(webDir)}
+func NewWithWeb(orch *orchestrator.Orchestrator, aiSvc *ai.Service, aiQueue *ai.Queue, webDir string) *Server {
+	s := &Server{orch: orch, ai: aiSvc, aiQueue: aiQueue, mux: http.NewServeMux(), webDir: strings.TrimSpace(webDir)}
 	s.routes()
 	return s
 }
@@ -44,6 +45,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /health", s.handleHealth)
+	s.mux.HandleFunc("POST /captures", s.handleCapture)
 	s.mux.HandleFunc("POST /jobs", s.handleCreateJob)
 	s.mux.HandleFunc("GET /jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /jobs/{id}", s.handleGetJob)
@@ -51,6 +53,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /docs/{id}", s.handleGetDoc)
 
 	s.mux.HandleFunc("GET /recipes", s.handleListRecipes)
+	s.mux.HandleFunc("POST /ai/jobs", s.handleAIEnqueue)
+	s.mux.HandleFunc("GET /ai/jobs", s.handleListAIJobs)
+	s.mux.HandleFunc("GET /ai/jobs/{id}", s.handleGetAIJob)
+	s.mux.HandleFunc("GET /ai/queue", s.handleAIQueueStats)
+	// /ai/run stays as an explicit synchronous compatibility/debug endpoint.
 	s.mux.HandleFunc("POST /ai/run", s.handleAIRun)
 	s.mux.HandleFunc("GET /ai/responses/{id}", s.handleGetAIResponse)
 	s.mux.HandleFunc("GET /docs/{id}/ai", s.handleListDocAI)
@@ -114,7 +121,7 @@ func withStaticUI(api http.Handler, webDir string) http.Handler {
 func isAPIPath(p string) bool {
 	p = path.Clean("/" + p)
 	switch {
-	case p == "/health", p == "/jobs", p == "/docs", p == "/recipes", p == "/ai/run":
+	case p == "/health", p == "/captures", p == "/jobs", p == "/docs", p == "/recipes", p == "/ai/run", p == "/ai/jobs", p == "/ai/queue":
 		return true
 	case strings.HasPrefix(p, "/jobs/"),
 		strings.HasPrefix(p, "/docs/"),
@@ -127,11 +134,48 @@ func isAPIPath(p string) bool {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	aiOK := s.ai != nil && s.ai.Configured()
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":        "ok",
-		"time":          time.Now().UTC().Format(time.RFC3339),
-		"ai_configured": aiOK,
-	})
+	payload := map[string]any{
+		"status":              "ok",
+		"time":                time.Now().UTC().Format(time.RFC3339),
+		"ai_configured":       aiOK,
+		"capture_concurrency": s.orch.Concurrency(),
+	}
+	if s.aiQueue != nil {
+		if stats, err := s.aiQueue.Stats(); err == nil {
+			payload["ai_queue"] = stats
+		}
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
+	var req domain.BrowserCaptureRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, domain.ErrInvalidTarget, "invalid json body")
+		return
+	}
+	receipt, err := s.orch.CaptureSnapshot(req)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, domain.ErrInvalidTarget, err.Error())
+		return
+	}
+	if req.AutoAI {
+		if s.aiQueue == nil {
+			receipt.AIError = "ai queue unavailable"
+		} else {
+			job, err := s.aiQueue.Enqueue(domain.RunAIRequest{
+				DocumentID: receipt.DocumentID,
+				RecipeID:   req.RecipeID,
+				Model:      req.Model,
+			})
+			if err != nil {
+				receipt.AIError = err.Error()
+			} else {
+				receipt.AIJob = job
+			}
+		}
+	}
+	writeJSON(w, http.StatusAccepted, receipt)
 }
 
 func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +250,69 @@ func (s *Server) handleListRecipes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.ai.ListRecipes())
+}
+
+func (s *Server) handleAIEnqueue(w http.ResponseWriter, r *http.Request) {
+	if s.aiQueue == nil {
+		writeErr(w, http.StatusServiceUnavailable, domain.ErrAINotConfigured, "ai queue unavailable")
+		return
+	}
+	var req domain.RunAIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, domain.ErrInvalidTarget, "invalid json body")
+		return
+	}
+	job, err := s.aiQueue.Enqueue(req)
+	if err != nil {
+		code, status := classifyAIErr(err)
+		writeErr(w, status, code, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (s *Server) handleListAIJobs(w http.ResponseWriter, r *http.Request) {
+	if s.aiQueue == nil {
+		writeJSON(w, http.StatusOK, []domain.AIJob{})
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	status := domain.AIJobStatus(strings.TrimSpace(r.URL.Query().Get("status")))
+	list, err := s.aiQueue.List(limit, status)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, domain.ErrInternal, err.Error())
+		return
+	}
+	if list == nil {
+		list = []domain.AIJob{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (s *Server) handleGetAIJob(w http.ResponseWriter, r *http.Request) {
+	if s.aiQueue == nil {
+		writeErr(w, http.StatusServiceUnavailable, domain.ErrAINotConfigured, "ai queue unavailable")
+		return
+	}
+	job, err := s.aiQueue.Get(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, domain.ErrNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+func (s *Server) handleAIQueueStats(w http.ResponseWriter, r *http.Request) {
+	if s.aiQueue == nil {
+		writeJSON(w, http.StatusOK, domain.AIQueueStats{})
+		return
+	}
+	stats, err := s.aiQueue.Stats()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, domain.ErrInternal, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (s *Server) handleAIRun(w http.ResponseWriter, r *http.Request) {

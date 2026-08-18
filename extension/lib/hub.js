@@ -3,9 +3,6 @@
 
 const DEFAULT_HUB = "http://127.0.0.1:8080";
 
-/**
- * @returns {Promise<{ hubUrl: string, autoAi: boolean, recipeId: string }>}
- */
 export async function getSettings() {
   const data = await chrome.storage.sync.get({
     hubUrl: DEFAULT_HUB,
@@ -19,68 +16,54 @@ export async function getSettings() {
   };
 }
 
-/**
- * @param {Partial<{ hubUrl: string, autoAi: boolean, recipeId: string }>} settings
- */
 export async function saveSettings(settings) {
   await chrome.storage.sync.set(settings);
 }
 
-/**
- * @param {string} hubUrl
- */
-export async function healthCheck(hubUrl) {
-  const res = await fetch(`${hubUrl}/health`, { method: "GET" });
-  if (!res.ok) {
-    throw new Error(`health ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * @param {string} hubUrl
- * @param {CreateJobBody} body
- * @returns {Promise<Job>}
- */
-export async function createJob(hubUrl, body) {
-  const res = await fetch(`${hubUrl}/jobs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+async function hubJson(hubUrl, path, init = {}) {
+  const res = await fetch(`${hubUrl}${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init.headers || {}) },
   });
   const text = await res.text();
   let data;
   try {
-    data = JSON.parse(text);
+    data = text ? JSON.parse(text) : null;
   } catch {
-    throw new Error(`POST /jobs invalid JSON: ${text.slice(0, 200)}`);
+    throw new Error(`${path} invalid JSON: ${text.slice(0, 200)}`);
   }
-  if (!res.ok) {
-    throw new Error(data.error_message || data.error_code || `POST /jobs ${res.status}`);
-  }
+  if (!res.ok) throw new Error(data?.error_message || data?.error_code || `${path} ${res.status}`);
   return data;
 }
 
-/**
- * @param {string} hubUrl
- * @param {string} jobId
- * @returns {Promise<Job>}
- */
+export async function healthCheck(hubUrl) {
+  return hubJson(hubUrl, "/health", { method: "GET" });
+}
+
+export async function captureSnapshot(hubUrl, snapshot, options = {}) {
+  return hubJson(hubUrl, "/captures", {
+    method: "POST",
+    body: JSON.stringify({
+      ...snapshot,
+      auto_ai: Boolean(options.autoAi),
+      recipe_id: options.recipeId || "summarize",
+    }),
+  });
+}
+
+export async function queueStats(hubUrl) {
+  return hubJson(hubUrl, "/ai/queue", { method: "GET" });
+}
+
+// URL-only fallback API retained for pages where scripting is unavailable.
+export async function createJob(hubUrl, body) {
+  return hubJson(hubUrl, "/jobs", { method: "POST", body: JSON.stringify(body) });
+}
+
 export async function getJob(hubUrl, jobId) {
-  const res = await fetch(`${hubUrl}/jobs/${encodeURIComponent(jobId)}`);
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error_message || `GET /jobs ${res.status}`);
-  }
-  return data;
+  return hubJson(hubUrl, `/jobs/${encodeURIComponent(jobId)}`, { method: "GET" });
 }
 
-/**
- * @param {string} hubUrl
- * @param {string} jobId
- * @param {{ intervalMs?: number, timeoutMs?: number, onTick?: (job: Job) => void }} [opts]
- * @returns {Promise<Job>}
- */
 export async function waitJob(hubUrl, jobId, opts = {}) {
   const intervalMs = opts.intervalMs ?? 600;
   const timeoutMs = opts.timeoutMs ?? 180_000;
@@ -88,47 +71,16 @@ export async function waitJob(hubUrl, jobId, opts = {}) {
   for (;;) {
     const job = await getJob(hubUrl, jobId);
     opts.onTick?.(job);
-    if (job.status === "done" || job.status === "failed" || job.status === "cancelled") {
-      return job;
-    }
-    if (Date.now() - started > timeoutMs) {
-      throw new Error(`timeout waiting for job ${jobId} (status=${job.status})`);
-    }
-    await sleep(intervalMs);
+    if (["done", "failed", "cancelled"].includes(job.status)) return job;
+    if (Date.now() - started > timeoutMs) throw new Error(`timeout waiting for job ${jobId}`);
+    await new Promise((r) => setTimeout(r, intervalMs));
   }
 }
 
-/**
- * @param {string} hubUrl
- * @param {{ document_id: string, recipe_id?: string }} body
- */
-export async function runAi(hubUrl, body) {
-  const res = await fetch(`${hubUrl}/ai/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error_message || `POST /ai/run ${res.status}`);
-  }
-  return data;
-}
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-/**
- * Human-readable job failure.
- * @param {Job} job
- */
 export function formatJobFailure(job) {
   const parts = [];
   if (job.error_code) parts.push(job.error_code);
   if (job.error_message) parts.push(job.error_message);
-  if (job.trace?.length) {
-    parts.push(`trace: ${job.trace.slice(-4).join(" → ")}`);
-  }
+  if (job.trace?.length) parts.push(`trace: ${job.trace.slice(-4).join(" → ")}`);
   return parts.join(" | ") || "capture failed";
 }

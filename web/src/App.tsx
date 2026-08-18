@@ -43,6 +43,7 @@ export default function App() {
   const [aiList, setAiList] = useState<AIResponse[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [recipeId, setRecipeId] = useState("summarize");
+  const [aiJobMsg, setAiJobMsg] = useState("");
 
   const [captureUrl, setCaptureUrl] = useState("fake://hub-ui-demo");
   const [captureMsg, setCaptureMsg] = useState("");
@@ -144,9 +145,11 @@ export default function App() {
     if (!selectedDocId) return;
     setBusy(true);
     setError("");
+    setAiJobMsg("");
     try {
-      await api.runAi(selectedDocId, recipeId);
-      await loadDoc(selectedDocId);
+      const job = await api.enqueueAi(selectedDocId, recipeId);
+      setAiJobMsg(`${job.status} · ${job.id} · attempts ${job.attempts}/${job.max_attempts}`);
+      await refreshHealth();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -159,7 +162,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <h1>Capture Flow</h1>
-          <p>Local Hub · OpenCLI · AI</p>
+          <p>Browser DOM · Durable Queue · AI Workers</p>
         </div>
         <nav className="nav">
           <button className={tab === "library" ? "active" : ""} onClick={() => setTab("library")}>
@@ -174,7 +177,9 @@ export default function App() {
         </nav>
         <div className={`health ${health ? "ok" : "bad"}`}>
           {health
-            ? `hub ok · ai ${health.ai_configured ? "on" : "off"}`
+            ? health.ai_queue
+              ? `hub ok · ai ${health.ai_configured ? "on" : "off"} · running ${health.ai_queue.running}/${health.ai_queue.concurrency} · queued ${health.ai_queue.queued}`
+              : `hub ok · ai ${health.ai_configured ? "on" : "off"}`
             : "hub offline · start go run ./cmd/hub"}
         </div>
       </aside>
@@ -358,9 +363,10 @@ export default function App() {
                         ))}
                       </select>
                       <button className="primary" disabled={busy} onClick={() => void onRunAi()}>
-                        Run AI
+                        Queue AI
                       </button>
                     </div>
+                    {aiJobMsg ? <div className="pre">AI queue: {aiJobMsg}</div> : null}
 
                     <h4 style={{ margin: "8px 0" }}>Content</h4>
                     <div className="pre">{docDetail.content_md || "(empty)"}</div>
