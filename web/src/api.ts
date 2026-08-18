@@ -44,6 +44,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ document_id: documentId, recipe_id: recipeId }),
     }),
+  listAiJobs: (limit = 50, status = "") =>
+    request<AIJob[]>(`/ai/jobs?limit=${limit}${status ? `&status=${encodeURIComponent(status)}` : ""}`),
   getAiJob: (id: string) => request<AIJob>(`/ai/jobs/${encodeURIComponent(id)}`),
   aiQueue: () => request<AIQueueStats>("/ai/queue"),
   listDocAi: (documentId: string) =>
