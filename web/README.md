@@ -1,6 +1,23 @@
 # Capture Flow · Local Hub Web UI
 
-React + Vite + TypeScript。开发时通过 Vite proxy 访问本机 Hub。
+React + Vite + TypeScript 的本地工作台。当前 UI 以 **Catppuccin Mocha** 为默认主题，并支持持久化切换到 **Latte**。
+
+## 设计目标
+
+Web 不再只是调试面板，而是围绕日常使用的三条主路径组织：
+
+- **资料库**：搜索 → 阅读正文 → 查看 AI 结果 / 元数据 → 继续加入 AI 队列。
+- **活动**：统一观察 Capture Queue 与 AI Queue，看到并发、排队、重试、失败和执行轨迹。
+- **采集**：手动 URL fallback 入队即返回；日常浏览优先使用 Browser Snapshot。
+
+交互原则：
+
+- 后台任务不阻塞页面，不要求用户等待轮询结束。
+- Capture 与 AI 使用独立的局部 loading 状态，不用全局 busy 锁住整页。
+- 成功 / 错误通过 toast 就地反馈；Hub 离线提供可复制的启动命令。
+- `/` 可随时聚焦资料库搜索。
+- Mocha / Latte 主题保存到 `localStorage`，首屏脚本避免主题闪烁。
+- 响应式布局覆盖桌面、平板和窄屏，并尊重 `prefers-reduced-motion`。
 
 ## 运行
 
@@ -14,12 +31,6 @@ bun install
 bun run dev
 # → http://127.0.0.1:5173
 ```
-
-页面分区：
-
-- **Library**：文档列表 + 正文预览 + Run AI
-- **Jobs**：Job 状态 / trace
-- **Capture**：提交 URL
 
 API 前缀：
 
