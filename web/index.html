@@ -1,9 +1,20 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="mocha">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Capture Flow · Local Hub</title>
+    <meta name="description" content="Capture Flow local content inbox and durable AI queue." />
+    <meta name="theme-color" content="#1e1e2e" />
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("capture-flow-theme") === "latte" ? "latte" : "mocha";
+          document.documentElement.dataset.theme = theme;
+          document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "latte" ? "#eff1f5" : "#1e1e2e");
+        } catch {}
+      })();
+    </script>
+    <title>Capture Flow · Local Intelligence Inbox</title>
   </head>
   <body>
     <div id="root"></div>
